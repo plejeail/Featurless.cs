@@ -7,6 +7,10 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <DefineConstants>TRACE;</DefineConstants>
+    </PropertyGroup>
+
     <ItemGroup>
       <ProjectReference Include="..\FeaturlessLogger\FeaturlessLogger.csproj" />
       <ProjectReference Include="..\MiniTest\MiniTest.csproj" />

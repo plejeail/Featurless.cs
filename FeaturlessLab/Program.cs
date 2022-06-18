@@ -1,5 +1,7 @@
 ﻿namespace FeaturlessLab;
 
+using Featurless;
+
 public static class Program
 {
     private static bool HasFlag(string[]? args, string value) {
@@ -14,5 +16,13 @@ public static class Program
         if (HasFlag(args, "logger")) {
             LoggerLab.Run();
         }
+    }
+
+    public static void UsageExample() {
+        Featurless.Logger logger = new Featurless.Logger(logFolderPath: "/path/to/my/folder"
+                                                        , logNameWithoutExt: "justMyFilename"
+                                                        , maxSizeInKB: 10000 // 1MB
+                                                        , maxNumberOfFiles: 7);
+
     }
 }
