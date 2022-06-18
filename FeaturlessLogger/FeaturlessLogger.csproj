@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>disable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>Featurless Logger</Title>
+        <Authors>Pierre Lejeail</Authors>
+        <Description>A simple logger class</Description>
+        <PackageLicenseUrl>https://raw.githubusercontent.com/plejeail/Featurless.cs/master/LICENSE</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/plejeail/Featurless.cs</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>logger, file rolling</PackageTags>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+      <DebugType>full</DebugType>
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+      <NoWarn>1701;1702;NU5125</NoWarn>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+      <DocumentationFile>bin\Release\net6.0\FeaturlessLogger.xml</DocumentationFile>
+      <NoWarn>1701;1702;NU5125</NoWarn>
+    </PropertyGroup>
+
+</Project>
