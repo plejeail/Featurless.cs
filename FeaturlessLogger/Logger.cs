@@ -6,6 +6,8 @@
 // - logging in a file ( in console)
 // - file rolling based on file size
 //
+// Code Example:
+//
 // And that's all.
 
 // #define FEATURLESS_LOG_LEVEL_DISABLED_TRACE
