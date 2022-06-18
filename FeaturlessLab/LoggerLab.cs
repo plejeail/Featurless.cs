@@ -14,7 +14,7 @@ public class LoggerLab
 
     private static void RunSingleThread(int count, int fileSize, int maxFiles) {
         Console.WriteLine("### Single thread ###");
-        using Logger l = new ("./", "test", fileSize, maxFiles);
+        using Logger l = new ("./", "logger-test-st", fileSize, maxFiles);
         const string msg = "OK my message is this: 'GET UP Man!'OK my message is this: 'GET UP Man!'";
         System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
         for (int i = 0; i < count; ++i) {
@@ -35,7 +35,7 @@ public class LoggerLab
             return;
         }
         Console.WriteLine("### Multi thread ###");
-        Logger l = new ("./", "testasync", fileSize, maxFiles);
+        Logger l = new ("./", "logger-test-mt", fileSize, maxFiles);
         l.MinLevel = Logger.Level.All;
         const string str = "Allo Allo ? cest ici que ca se passe, pas par la bas man!";
         Task[] logs = new Task[nbTasks];
