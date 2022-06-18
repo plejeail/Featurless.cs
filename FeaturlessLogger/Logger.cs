@@ -1,4 +1,4 @@
-﻿﻿//===-- Logger.cs -----------------------------------------------------------------------------===//
+﻿//===-- Logger.cs -----------------------------------------------------------------------------===//
 //
 // Experimenting with memory maps, because why not ?
 //
@@ -10,6 +10,7 @@
 //
 // And that's all.
 
+ // define constants to disable logs in code
 // #define FEATURLESS_LOG_LEVEL_DISABLED_TRACE
 // #define FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
 // #define FEATURLESS_LOG_LEVEL_DISABLED_INFO
@@ -23,30 +24,45 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using Interlocked = System.Threading.Interlocked;
 using MemoryMappedFile = System.IO.MemoryMappedFiles.MemoryMappedFile;
-using MemoryMappedViewAccessor = System.IO.MemoryMappedFiles.MemoryMappedViewAccessor;
 using MemoryMappedFileAccess = System.IO.MemoryMappedFiles.MemoryMappedFileAccess;
-using CallerFilePathAttribute = System.Runtime.CompilerServices.CallerFilePathAttribute;
+using MemoryMappedViewAccessor = System.IO.MemoryMappedFiles.MemoryMappedViewAccessor;
 using CallerLineNumberAttribute = System.Runtime.CompilerServices.CallerLineNumberAttribute;
+using CallerFilePathAttribute = System.Runtime.CompilerServices.CallerFilePathAttribute;
 
+/// <summary>
+/// Simple logger class
+/// </summary>
 public sealed unsafe class Logger : IDisposable
 {
     #nullable disable
-    private enum Level : long
+
+    /// <summary>
+    ///The following levels are defined in order of increasing priority:
+    /// All, Debug, Info, Warn, Error, Off.
+    /// </summary>
+    public enum Level
     {
-        Trace = 0x0043_0052_0054_0009L, // TRC
-        Debug = 0x0047_0042_0044_0009L, // DBG
-        Info  = 0x0046_004E_0049_0009L, // INF
-        Warn  = 0x004E_0052_0057_0009L, // WRN
-        Error = 0x0052_0052_0045_0009L, // ERR
+        All,
+        Debug,
+        Information,
+        Warning,
+        Error,
+        Off
     }
+
+    private const long _levelStringDebug = 0x0047_0042_0044_0009L; // DBG
+    private const long _levelStringInfo  = 0x0046_004E_0049_0009L; // INF
+    private const long _levelStringWarn  = 0x004E_0052_0057_0009L; // WRN
+    private const long _levelStringError = 0x0052_0052_0045_0009L; // ERR
+
 
     private const string _extension = ".log";
     private static readonly bool _isWindows =   Environment.OSVersion.Platform == PlatformID.Win32S
                                              || Environment.OSVersion.Platform == PlatformID.Win32Windows
                                              || Environment.OSVersion.Platform == PlatformID.Win32NT
                                              || Environment.OSVersion.Platform == PlatformID.WinCE;
-    private long _headOffset;
     private byte* _handlePtr;
+    private long _headOffset;
     private long _mapBytesLength;
     private int _concurrentWrites;
     private DateFormatter _dateHandler;
@@ -60,6 +76,9 @@ public sealed unsafe class Logger : IDisposable
     private readonly object _rollingLock = new ();
     // ReSharper disable once InconsistentNaming (maxSizeKB => kilobyte)
 
+    /// The default level is All.
+    public Level MinLevel = Level.All;
+
     /// <summary>
     /// Create a logger instance.
     /// </summary>
@@ -67,6 +86,7 @@ public sealed unsafe class Logger : IDisposable
     /// <param name="logNameWithoutExt">name of the log files without extension.</param>
     /// <param name="maxSizeInKB">maximum size of a log file.</param>
     /// <param name="maxNumberOfFiles">maximum number of log files.</param>
+    // ReSharper disable once InconsistentNaming
     public Logger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB, int maxNumberOfFiles) {
         _dateHandler = new DateFormatter();
         _headOffset = 0L;
@@ -82,20 +102,13 @@ public sealed unsafe class Logger : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Trace(string message
-                    , [CallerFilePath] string sourceFile = ""
-                    , [CallerLineNumber] int lineNumber = -1) {
-#if !FEATURLESS_LOG_LEVEL_DISABLED_TRACE
-        WriteLog(message, Level.Trace, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
-#endif
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Debug(string message,
                       [CallerFilePath] string sourceFile = "",
                       [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
-        WriteLog(message, Level.Debug, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        if (MinLevel <= Level.Debug) {
+            WriteLog(message, _levelStringDebug, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
 #endif
     }
 
@@ -104,7 +117,9 @@ public sealed unsafe class Logger : IDisposable
                      [CallerFilePath] string sourceFile = "",
                      [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_INFO
-        WriteLog(message, Level.Info, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        if (MinLevel <= Level.Information) {
+            WriteLog(message, _levelStringInfo, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
 #endif
     }
 
@@ -113,7 +128,9 @@ public sealed unsafe class Logger : IDisposable
                         [CallerFilePath] string sourceFile = "",
                         [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_WARN
-        WriteLog(message, Level.Warn, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        if (MinLevel <= Level.Warning) {
+            WriteLog(message, _levelStringWarn, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
 #endif
     }
 
@@ -122,7 +139,9 @@ public sealed unsafe class Logger : IDisposable
                       , [CallerFilePath] string sourceFile = ""
                       , [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_ERROR
-        WriteLog(message, Level.Error, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        if (MinLevel <= Level.Error) {
+            WriteLog(message, _levelStringError, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
 #endif
     }
 
@@ -138,10 +157,10 @@ public sealed unsafe class Logger : IDisposable
     /// Write logs in the memory map with format 'YYYY-MM-DD HH:MM:SS LEVEL @(file,line) message'.
     /// </summary>
     /// <param name="message">the message to write.</param>
-    /// <param name="level">the level value of the message.</param>
+    /// <param name="levelString">the level string hexa value.</param>
     /// <param name="callerFilePath">caller file path.</param>
     /// <param name="lineNumber">caller line call.</param>
-    private void WriteLog(string message, Level level, ReadOnlySpan<char> callerFilePath, int lineNumber) {
+    private void WriteLog(string message, long levelString, ReadOnlySpan<char> callerFilePath, int lineNumber) {
         int lineDigitsCount = Tools.CountDigits(lineNumber);
         int callerFilePathLength = callerFilePath.Length;
         int messageLength = message.Length;
@@ -156,13 +175,12 @@ public sealed unsafe class Logger : IDisposable
         char* locationPtr = (char*)(_handlePtr + currentOffset);
         // write date
         _dateHandler.WriteDate(locationPtr);
-        *(long*)(locationPtr + 19) = (long)level;
+        *(long*)(locationPtr + 19) = levelString;
         *(locationPtr + 23) = '\t';
         *(int*)(locationPtr + 24) = 0x00280040;
 
         // write caller location
         fixed (char* callerFilePathPtr = callerFilePath) {
-            //Tools.MemCopy(locationPtr + 26, callerFilePathPtr, callerFilePathLength);
             Unsafe.CopyBlock((void*)(locationPtr + 26), (void*)callerFilePathPtr,
                              (uint) (sizeof(char)*callerFilePathLength));
         }
@@ -175,7 +193,6 @@ public sealed unsafe class Logger : IDisposable
 
         // write message
         fixed (char* messagePtr = message) {
-            //Tools.MemCopy(locationPtr + 29, messagePtr, messageLength);
             Unsafe.CopyBlock((void*)(locationPtr + 29), (void*)messagePtr
                            , (uint)(sizeof(char) * messageLength));
         }
@@ -285,13 +302,10 @@ public sealed unsafe class Logger : IDisposable
     }
 
     private void ReleaseMap(string filePath, int indexFile) {
-        if (_handlePtr != null) {
+        if (_mapView != null && _handlePtr != null) {
             _mapView.SafeMemoryMappedViewHandle.ReleasePointer();
-        }
-
-        if (_mapView != null) {
-            _mapView.Dispose();
             _mapView = null;
+            _handlePtr = null;
         }
 
         if (_mappedFile != null) {
