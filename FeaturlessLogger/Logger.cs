@@ -7,7 +7,16 @@
 // - file rolling based on file size
 //
 // Code Example:
-//
+// public static void UsageExample() {
+//     Featurless.Logger logger = new Featurless.Logger(logFolderPath: "/path/to/my/folder"
+//                                                     , logNameWithoutExt: "justMyFilename"
+//                                                     , maxSizeInKB: 10000 // 1MB
+//                                                     , maxNumberOfFiles: 7);
+//      logger.Debug("Ok i'm recorded :)");
+//      logger.MinLevel = Featurless.Logger.Level.Warning;
+//      logger.Debug("I'm not recorded :(");
+//      logger.Error("I'm recorded :p");
+// }
 // And that's all.
 
  // define constants to disable logs in code

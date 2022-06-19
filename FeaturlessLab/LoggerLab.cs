@@ -6,9 +6,11 @@ public class LoggerLab
 {
     public static void Run(bool multiThread = true) {
 
-        RunSingleThread(20000, 1000, 10);
-        Console.WriteLine("####################");
-        RunMultiThread(20, 1000, 1000, 10);
+        RunSingleThread(200, 1000, 3);
+        if (multiThread) {
+            Console.WriteLine("####################");
+            RunMultiThread(20, 10, 1000, 3);
+        }
     }
 
     private static void RunSingleThread(int count, int fileSize, int maxFiles) {

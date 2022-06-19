@@ -19,9 +19,10 @@ public static class MiniTestLab
 
     public static void Run(string[] args) {
         using FileStream fs = File.OpenWrite("./mini-test-output.txt");
-        MiniTest tests = new(args, fs);
-        tests.SuccessColor = ConsoleColor.Green;
-        tests.ErrorColor = ConsoleColor.Magenta;
+        MiniTest tests = new(args, fs) {
+                SuccessColor = ConsoleColor.Green,
+                ErrorColor = ConsoleColor.Magenta,
+        };
         tests.AddGroup("toto");
         tests.AddGroup("tata");
         tests.AddGroup("titi");

@@ -23,26 +23,13 @@ internal static unsafe class Tools
         }
     }
 
-    internal static int CountHexaDigits(int value) {
-        switch (value) {
-            case < 0x10:     return 1;
-            case < 0x100:    return 2;
-            case < 0x1000:   return 3;
-            case < 0x10000:  return 4;
-            case < 0x100000: return 5;
-            default:
-                Debug.Assert(value < 0x1000000, "I did not assumed that your source code had >10000 lines, sorry.");
-                return 6;
-        }
-    }
-
     internal static void WriteThreadId(char* destination) {
         // starting from the less significant digit and formating backward as
         // hexadecimal until end of integer. (all char digits are assumed to be set
         // to 0 before
         int threadId = Thread.CurrentThread.ManagedThreadId;
         while (threadId > 0) {
-            *(destination--) = _hexDigits[threadId % 16];
+            *destination-- = _hexDigits[threadId % 16];
             threadId /= 16;
         }
     }

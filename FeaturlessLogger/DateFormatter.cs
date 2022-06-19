@@ -8,13 +8,12 @@ using System.Runtime.InteropServices;
 /// </summary>
 internal struct DateFormatter
 {
-
-    private static readonly uint[] _daysToMonth365 = new uint[13] {
+    private static readonly uint[] _daysToMonth365 = new uint[] {
             0U, 31U, 59U, 90U, 120U, 151U
           , 181U, 212U, 243U, 273U, 304U, 334U
           , 365U,
     };
-    private static readonly uint[] _daysToMonth366 = new uint[13] {
+    private static readonly uint[] _daysToMonth366 = new uint[] {
             0U, 31U, 60U, 91U, 121U, 152U
           , 182U, 213U, 244U, 274U, 305U, 335U
           , 366U,
@@ -92,14 +91,12 @@ internal struct DateFormatter
         if (num8 == 4U) {
             num8 = 3U;
         }
-
         // Year
         *(int*)dest = 0x0030_0032;
         Tools.WriteSmallIntegerString(dest + 2,
                                       num2 * 400 + num4 * 100
                                         + num6 * 4 + num8 - 30);
         *(dest + 4) = '-';
-
         uint num9 = num7 - num8 * 365U;
         uint[] numArray = num8 != 3U || num6 == 24U && num4 != 3U
                                   ? _daysToMonth365
@@ -108,11 +105,9 @@ internal struct DateFormatter
         while (num9 >= numArray[index]) {
             ++index;
         }
-
         // Month
         Tools.WriteSmallIntegerString(dest + 5, index);
         *(dest + 7) = '-';
-
         // Day of month
         Tools.WriteSmallIntegerString(dest + 8,
                                       num9 - numArray[index - 1] + 1);
@@ -151,6 +146,7 @@ internal struct DateFormatter
         // ReSharper restore FieldCanBeMadeReadOnly.Local
 #pragma warning restore CS0649
     }
+
     [DllImport("kernel32")]
     private extern static void GetSystemTimeAsFileTime(ref WindowsFileTime lpSystemTimeAsFileTime);
 
@@ -160,5 +156,4 @@ internal struct DateFormatter
         GetSystemTimeAsFileTime(ref fileTime);
         return (ulong)fileTime.ticks;
     }
-
 }
