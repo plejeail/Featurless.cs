@@ -10,7 +10,7 @@ public static class Program
 
     public static void Main(string[] args) {
         if (HasFlag(args, "minitest")) {
-            MiniTestLab.Run(Array.Empty<string>());
+            // MiniTestLab.Run(Array.Empty<string>());
         }
 
         if (HasFlag(args, "logger")) {

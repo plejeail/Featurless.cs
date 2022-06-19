@@ -4,12 +4,11 @@ using Featurless;
 
 public class LoggerLab
 {
-
     public static void Run(bool multiThread = true) {
 
-        RunSingleThread(200000, 10000, 10);
+        RunSingleThread(20000, 1000, 10);
         Console.WriteLine("####################");
-        RunMultiThread(20, 10000, 10000, 10);
+        RunMultiThread(20, 1000, 1000, 10);
     }
 
     private static void RunSingleThread(int count, int fileSize, int maxFiles) {
@@ -36,7 +35,7 @@ public class LoggerLab
         }
         Console.WriteLine("### Multi thread ###");
         Logger l = new ("./", "logger-test-mt", fileSize, maxFiles);
-        l.MinLevel = Logger.Level.All;
+        l.MinLevel = Logger.Level.Debug;
         const string str = "Allo Allo ? cest ici que ca se passe, pas par la bas man!";
         Task[] logs = new Task[nbTasks];
         int done = 0;
