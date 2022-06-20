@@ -41,7 +41,7 @@ using CallerFilePathAttribute = System.Runtime.CompilerServices.CallerFilePathAt
 /// <summary>
 /// Simple logger class
 /// </summary>
-public sealed unsafe class Logger : IDisposable
+public sealed class Logger : IDisposable
 {
     #nullable disable
 
@@ -74,7 +74,7 @@ public sealed unsafe class Logger : IDisposable
                                              || Environment.OSVersion.Platform == PlatformID.Win32Windows
                                              || Environment.OSVersion.Platform == PlatformID.Win32NT
                                              || Environment.OSVersion.Platform == PlatformID.WinCE;
-    private byte* _handlePtr;
+    private unsafe byte* _handlePtr;
     private long  _headOffset;
     private long  _mapBytesLength;
     private int   _concurrentWrites;
@@ -183,7 +183,7 @@ public sealed unsafe class Logger : IDisposable
     /// <param name="levelString">the level string hexa value.</param>
     /// <param name="callerFilePath">caller file path.</param>
     /// <param name="lineNumber">caller line call.</param>
-    private void WriteRecord(string message, long levelString, ReadOnlySpan<char> callerFilePath, int lineNumber) {
+    private unsafe void WriteRecord(string message, long levelString, ReadOnlySpan<char> callerFilePath, int lineNumber) {
         // size computation
         int lineDigitsCount = Tools.CountDigits(lineNumber);
         int callerFilePathLength = callerFilePath.Length;
@@ -307,7 +307,7 @@ public sealed unsafe class Logger : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private void MapFile(long capacity) {
+    private unsafe void MapFile(long capacity) {
         ReleaseMap(_logFileBasePath, _currentFileIndex - 1);
 
         _logFilePathes.Enqueue(_currentFileIndex);
@@ -339,7 +339,7 @@ public sealed unsafe class Logger : IDisposable
         _mapView.SafeMemoryMappedViewHandle.AcquirePointer(ref _handlePtr);
     }
 
-    private void ReleaseMap(string filePath, int indexFile) {
+    private unsafe void ReleaseMap(string filePath, int indexFile) {
         if (_mapView != null && _handlePtr != null) {
             _mapView.SafeMemoryMappedViewHandle.ReleasePointer();
             _mapView = null;
