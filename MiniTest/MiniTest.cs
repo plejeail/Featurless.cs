@@ -97,6 +97,11 @@ You can NOT do that: program -e group1 group3 group4 -d group2
     /// </summary>
     public ConsoleColor ErrorColor;
 
+    /// <summary>True if all test done until now are successfule, otherwise false.</summary>
+    public bool StatusOk {
+        get => _globalStats.CountEvaluated == _globalStats.CountSuccess;
+    }
+
     /// <summary>
     /// Get/Set the max line width of the failed tests logs. Default to Console.WindowWidth in
     /// console or 120 if using a stream.

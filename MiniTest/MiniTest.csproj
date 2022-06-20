@@ -20,6 +20,7 @@
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
       <NoWarn>1701;1702;NU5125</NoWarn>
+      <DocumentationFile>bin\Release\net6.0\MiniTest.xml</DocumentationFile>
     </PropertyGroup>
 
 </Project>
