@@ -107,7 +107,9 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         get => _lineMaxWidth;
         set {
             if (value < _minAuthorizedLineMaxWidth) {
-                throw new ArgumentException($"MaxWidth argument is too low (<{_minAuthorizedLineMaxWidth})");
+                throw new ArgumentException("MaxWidth argument is too low (<"
+                                           + _minAuthorizedLineMaxWidth
+                                           + ')');
             }
 
             _lineMaxWidth = value;
@@ -197,7 +199,7 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         if (_groupStats.ContainsKey(name)) {
             throw new ArgumentException($"Group '{name}' already added to the test");
         }
-        ;
+
         if (_logLevel == LogLevel.Verbose) {
             _outputStream.Write(Encoding.GetBytes($"### Registered group '{name}'{Environment.NewLine}"));
         }
@@ -281,24 +283,6 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         InternalCheck(expression, testName, groupName);
     }
 
-    /// <summary>
-    /// Check if the MiniTest instance/group provided is in failed state.
-    /// If the name provided is null check for the instance, otherwise for the provided group.
-    /// </summary>
-    /// <param name="groupName">name of the group to check (default is null)</param>
-    /// <exception cref="ArgumentException">No group registered with the provided group name</exception>
-    public bool HasFailedRequirement(string? groupName = null) {
-        if (groupName == null) {
-            return _globalStats.Status == StatusCode.RequireFailed;
-        }
-
-        ref Stats groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
-        if (Unsafe.IsNullRef(ref groupStats)) {
-            throw new ArgumentException($"The group '{groupName}' has not been registered with AddGroup");
-        }
-        return groupStats.Status == StatusCode.RequireFailed;
-    }
-
     /// <summary>Write a detailed summary of the tests performed, at a global level and for each group</summary>
     public void Summarize() {
         if (_globalStats.Status == StatusCode.PrintHelp) {
@@ -314,7 +298,6 @@ You can NOT do that: program -e group1 group3 group4 -d group2
 - coverage:  {globalCoverage}% ({skippedTotal} checks skipped)
 - total:     {_globalStats.CountTotal} checks
 ###   Groups Summary   ###"));
-
         foreach (string groupName in _groupStats.Keys) {
             if (IsGroupFiltered(groupName)) {
                 continue;
