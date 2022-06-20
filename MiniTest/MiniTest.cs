@@ -303,10 +303,11 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         int skippedTotal = _globalStats.CountTotal - _globalStats.CountEvaluated;
 
         _outputStream.Write(Encoding.GetBytes($@"#####   TEST GLOBAL SUMMARY
-                              - successes: {_globalStats.CountSuccess}/{_globalStats.CountEvaluated}
+- successes: {_globalStats.CountSuccess}/{_globalStats.CountEvaluated}
 - coverage:  {globalCoverage}% ({skippedTotal} checks skipped)
 - total:     {_globalStats.CountTotal} checks
-###   Groups Summary   ###"));
+###   Groups Summary   ##
+"));
         foreach (string groupName in _groupStats.Keys) {
             if (IsGroupFiltered(groupName)) {
                 continue;
@@ -315,6 +316,7 @@ You can NOT do that: program -e group1 group3 group4 -d group2
             Debug.Assert(!Unsafe.IsNullRef(ref stats), "group registered but unitialized");
             if (stats.CountTotal == 0) {
                 _outputStream.Write(Encoding.GetBytes($"- [[{groupName}]] no tests found."));
+                continue;
             }
             string isOk = stats.Status == StatusCode.Ok ? "OK" : "KO";
             int coveragePercent = stats.CountTotal > 0 ? 100 * stats.CountEvaluated / stats.CountTotal : -1;
