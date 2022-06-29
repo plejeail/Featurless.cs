@@ -1,14 +1,14 @@
 namespace Featurless;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Debug = System.Diagnostics.Debug;
 
 internal static unsafe class Tools
 {
-    private static readonly char[] _hexDigits = new[] {
+    private static readonly char[] _hexDigits = {
             '0', '1', '2', '3', '4', '5'
           , '6', '7', '8', '9', 'a', 'b'
-          , 'c', 'd', 'e', 'f'
+          , 'c', 'd', 'e', 'f',
     };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -40,14 +40,15 @@ internal static unsafe class Tools
         do {
             int nextValue = value / 10;
             int remainder = value - nextValue * 10;
-            *destination-- = (char)(remainder + 0x30);
+            *destination-- = (char) (remainder + 0x30);
             value = nextValue;
         } while (value != 0);
     }
 
     internal static void WriteSmallIntegerString(char* dest, uint value) {
+        // performs better than lookup table (< memory, same speed)
         uint ten = value / 10U;
         uint unit = value - ten * 10U;
-        *(uint*)dest = 0x30U + ten + ((0x30U + unit) << 0x10);
+        *(uint*) dest = 0x30U + ten + ((0x30U + unit) << 0x10);
     }
 }

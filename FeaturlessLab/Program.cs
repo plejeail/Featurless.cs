@@ -1,5 +1,8 @@
 ﻿namespace FeaturlessLab;
 
+using Featurless;
+using FeaturlessLab.HashTable;
+
 public static class Program
 {
     private static bool HasFlag(string[]? args, string value) {
@@ -7,12 +10,20 @@ public static class Program
     }
 
     public static void Main(string[] args) {
+        /* *
         if (HasFlag(args, "minitest")) {
             MiniTestLab.Run(Array.Empty<string>());
         }
-
+        /* *
         if (HasFlag(args, "logger")) {
             LoggerLab.Run();
+        }
+        /* */
+        MiniTest tests = new();
+        if (HasFlag(args, "hashtable")) {
+            LinearTableLab.Run(Array.Empty<string>(), tests);
+            /**/
+            tests.Summarize();
         }
     }
 }

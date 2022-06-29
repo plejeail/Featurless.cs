@@ -1,6 +1,7 @@
 namespace FeaturlessLab;
 
 using Featurless;
+
 public static class MiniTestLab
 {
     public static void TestGroup1(MiniTest tests, string groupName) {
@@ -20,12 +21,11 @@ public static class MiniTestLab
     public static void Run(string[] args) {
         using FileStream fs = File.OpenWrite("./mini-test-output.txt");
         MiniTest tests = new(args, fs) {
-                SuccessColor = ConsoleColor.Green,
-                ErrorColor = ConsoleColor.Magenta,
+                SuccessColor = ConsoleColor.Green
+              , ErrorColor = ConsoleColor.Magenta
+               ,
         };
-        tests.AddGroup("toto");
-        tests.AddGroup("tata");
-        tests.AddGroup("titi");
+
         tests.MaxWidth = 80;
         TestGroup1(tests, "toto");
         TestGroup2(tests, "toto");

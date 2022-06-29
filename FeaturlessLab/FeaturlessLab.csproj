@@ -8,12 +8,17 @@
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <DefineConstants>TRACE;</DefineConstants>
+        <DefineConstants>TRACE;</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\FeaturlessLogger\FeaturlessLogger.csproj" />
-      <ProjectReference Include="..\MiniTest\MiniTest.csproj" />
+        <ProjectReference Include="..\HashTable\HashTable.csproj"/>
+        <ProjectReference Include="..\Logger\Logger.csproj"/>
+        <ProjectReference Include="..\MiniTest\MiniTest.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" Version="0.13.1"/>
     </ItemGroup>
 
 </Project>

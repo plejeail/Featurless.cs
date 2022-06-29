@@ -12,19 +12,20 @@
         <RepositoryUrl>https://github.com/plejeail/Featurless.cs</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>logger, file rolling</PackageTags>
+        <RootNamespace>FeaturlessLogger</RootNamespace>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-      <DebugType>full</DebugType>
-      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-      <NoWarn>1701;1702;NU5125</NoWarn>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <DebugType>full</DebugType>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <NoWarn>1701;1702;NU5125</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-      <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-      <DocumentationFile>bin\Release\net6.0\FeaturlessLogger.xml</DocumentationFile>
-      <NoWarn>1701;1702;NU5125</NoWarn>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <DocumentationFile>bin\Release\net6.0\FeaturlessLogger.xml</DocumentationFile>
+        <NoWarn>1701;1702;NU5125</NoWarn>
     </PropertyGroup>
 
 </Project>

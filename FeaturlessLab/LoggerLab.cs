@@ -1,11 +1,11 @@
 namespace FeaturlessLab;
 
+using System.Diagnostics;
 using Featurless;
 
 public class LoggerLab
 {
     public static void Run(bool multiThread = true) {
-
         RunSingleThread(200, 1000, 3);
         if (multiThread) {
             Console.WriteLine("####################");
@@ -15,12 +15,13 @@ public class LoggerLab
 
     private static void RunSingleThread(int count, int fileSize, int maxFiles) {
         Console.WriteLine("### Single thread ###");
-        using Logger l = new ("./", "logger-test-st", fileSize, maxFiles);
+        using Logger l = new("./", "logger-test-st", fileSize, maxFiles);
         const string msg = "OK my message is this: 'GET UP Man!'OK my message is this: 'GET UP Man!'";
-        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        Stopwatch sw = Stopwatch.StartNew();
         for (int i = 0; i < count; ++i) {
             l.Error(msg);
         }
+
         if (sw.ElapsedMilliseconds > 0) {
             Console.WriteLine($"Time: {sw.ElapsedMilliseconds}ms");
             Console.WriteLine($"logs/s: {1000 * count / sw.ElapsedMilliseconds}");
@@ -35,8 +36,9 @@ public class LoggerLab
         if (nbTasks <= 0 || nLogsPerTask <= 0) {
             return;
         }
+
         Console.WriteLine("### Multi thread ###");
-        Logger l = new ("./", "logger-test-mt", fileSize, maxFiles);
+        Logger l = new("./", "logger-test-mt", fileSize, maxFiles);
         l.MinLevel = Logger.Level.Debug;
         const string str = "Allo Allo ? cest ici que ca se passe, pas par la bas man!";
         Task[] logs = new Task[nbTasks];
@@ -47,11 +49,12 @@ public class LoggerLab
                     // ReSharper disable once AccessToDisposedClosure
                     l.Debug(str);
                 }
+
                 Interlocked.Increment(ref done);
             });
         }
 
-        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        Stopwatch sw = Stopwatch.StartNew();
         for (int i = 0; i < logs.Length; ++i) {
             logs[i].Start();
         }
@@ -59,6 +62,7 @@ public class LoggerLab
         while (done != nbTasks) {
             Thread.Sleep(1);
         }
+
         l.Dispose();
         if (sw.ElapsedMilliseconds > 0) {
             Console.WriteLine($"Time: {sw.ElapsedMilliseconds}ms");
