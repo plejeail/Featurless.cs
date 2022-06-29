@@ -35,7 +35,6 @@ using System.Runtime.CompilerServices;
 /// <summary>Simple logger class</summary>
 public sealed class Logger : IDisposable
 {
-#region Level enum
     /// <summary>The following levels are defined in order of increasing priority: Debug, Info, Warn, Error, Off.</summary>
     public enum Level
     {
@@ -50,7 +49,6 @@ public sealed class Logger : IDisposable
         /// <summary>None</summary>
         Off,
     }
-#endregion
 
     private const long _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
     private const long _levelStringInfo = 0x0046_004E_0049_0020L;  // INF
