@@ -21,8 +21,6 @@
 // {
 //     Test.ParseArguments(args);
 //
-//     Test.AddGroup("groupA");
-//     tester.add_group("mygroupname");
 //     tester.check("mygroupname", "this is what my test do", true);
 //     tester.require("group0", "this would stop if it was false", true);
 //     tester.check("mygroupname", "also supporting functions/lambdas", _ => { return true; });
@@ -197,21 +195,6 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         }
     }
 
-    /// <summary> Register a group in the MiniTest instance</summary>
-    /// <param name="name">The name of the group to register</param>
-    /// <exception cref="ArgumentException">A group with the same name has already been registered.</exception>
-    public void AddGroup(string name) {
-        if (_groupStats.ContainsKey(name)) {
-            throw new ArgumentException($"Group '{name}' already added to the test");
-        }
-
-        if (_logLevel == LogLevel.Verbose) {
-            _outputStream.Write(Encoding.GetBytes($"### Registered group '{name}'{Environment.NewLine}"));
-        }
-
-        _groupStats.Add(name, new Stats());
-    }
-
     /// <param name="testName">name displayed in individual failure/success logs</param>
     /// <param name="value">result of the test, false if failed, true if successful</param>
     public void Require(string testName, bool value) {
@@ -299,6 +282,7 @@ You can NOT do that: program -e group1 group3 group4 -d group2
             _outputStream.Write(Encoding.GetBytes("##### TEST GLOBAL SUMMARY: No tests found"));
             return;
         }
+
         int globalCoverage = 100 * _globalStats.CountEvaluated / _globalStats.CountTotal;
         int skippedTotal = _globalStats.CountTotal - _globalStats.CountEvaluated;
 
@@ -308,16 +292,19 @@ You can NOT do that: program -e group1 group3 group4 -d group2
 - total:     {_globalStats.CountTotal} checks
 ###   Groups Summary   ##
 "));
+
         foreach (string groupName in _groupStats.Keys) {
             if (IsGroupFiltered(groupName)) {
                 continue;
             }
+
             ref Stats stats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
             Debug.Assert(!Unsafe.IsNullRef(ref stats), "group registered but unitialized");
             if (stats.CountTotal == 0) {
                 _outputStream.Write(Encoding.GetBytes($"- [[{groupName}]] no tests found."));
                 continue;
             }
+
             string isOk = stats.Status == StatusCode.Ok ? "OK" : "KO";
             int coveragePercent = stats.CountTotal > 0 ? 100 * stats.CountEvaluated / stats.CountTotal : -1;
             string str = $"- [{groupName}] status: {isOk}, coverage: {coveragePercent}%, {stats.CountSuccess}/{stats.CountEvaluated} successes{Environment.NewLine}";
@@ -354,13 +341,33 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         }
     }
 
+    /// <summary> Register a group in the MiniTest instance</summary>
+    /// <param name="name">The name of the group to register</param>
+    /// <exception cref="ArgumentException">A group with the same name has already been registered.</exception>
+    private void AddGroup(string name) {
+        if (_groupStats.ContainsKey(name)) {
+            throw new ArgumentException($"Group '{name}' already added to the test");
+        }
+
+        if (_logLevel == LogLevel.Verbose) {
+            _outputStream.Write(Encoding.GetBytes($"### Registered group '{name}'{Environment.NewLine}"));
+        }
+
+        _groupStats.Add(name, new Stats());
+    }
+
     private bool InternalCheck(Func<bool> expression, string message, string? groupName = null) {
         ref Stats groupStats = ref Unsafe.NullRef<Stats>();
         if (groupName != null) {
             groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
             if (Unsafe.IsNullRef(ref groupStats)) {
-                throw new ArgumentException($"The group '{groupName}' has not been registered with AddGroup");
+                AddGroup(groupName);
+                groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
+                if (Unsafe.IsNullRef(ref groupStats)) {
+                    throw new KeyNotFoundException($"ailed to register he group '{groupName}'");
+                }
             }
+
             if (groupStats.Status != StatusCode.Ok || IsGroupFiltered(groupName)) {
                 return true;
             }
@@ -381,10 +388,10 @@ You can NOT do that: program -e group1 group3 group4 -d group2
 
         _globalStats.CountEvaluated += 1;
         if (expression()) {
+            _globalStats.CountSuccess += 1;
             if (groupName != null) {
                 groupStats.CountSuccess += 1;
             }
-            _globalStats.CountSuccess += 1;
 
             if (_logLevel == LogLevel.Verbose) {
                 WriteMessage(message.PadRight(_lineMaxWidth - _minAuthorizedLineMaxWidth, '.') + $".Success{Environment.NewLine}"

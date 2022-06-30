@@ -189,8 +189,8 @@ public static class LinearTableLab
         tests.Require("LinearTable", "Initial keys ok", lt.Keys.Count == 0 && lt.Keys.FirstOrDefault() == null);
         tests.Require("LinearTable", "Initial values ok", lt.Values.Count == 0 && lt.Values.FirstOrDefault() == 0);
 
-        tests.Require("LinearTable", "ContainsKey Failure", !lt.ContainsKey(keyTest));
-        tests.Require("LinearTable", "Contains Failure", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
+        tests.Require("LinearTable", "ContainsKey Failure before adding", !lt.ContainsKey(keyTest));
+        tests.Require("LinearTable", "Contains Failure before adding", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
         lt.Add(keyTest, valueTest);
         tests.Require("LinearTable", "Added element ok", lt.Capacity == 1000 && lt.Count == 1);
 
@@ -200,7 +200,22 @@ public static class LinearTableLab
         tests.Check("LinearTable", "Indexer get", lt[keyTest] == valueTest);
         lt[keyTest] = valueTest * 2;
         tests.Check("LinearTable", "Indexer set", lt[keyTest] == valueTest * 2);
+        lt.Remove(new KeyValuePair<string, int>(keyTest, 0));
+        tests.Require("LinearTable", "ContainsKey Failure after remove", !lt.ContainsKey(keyTest));
+        tests.Require("LinearTable", "Contains Failure after remove", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
 
+        // Remove (then recheck contains)
+        // Add a few more items (then recheck contains)
+        // TryGetValue
+        // ICollection<KeyValuePair<TKey, TValue>>.CopyTo
+        // Clear (then recheck contains)
+        // GetValueRef + update ref => change value
+
+        // Enumerator: MoveNext until end, must have gone through al key/value pairs must end at the end
+        // KeyCollection/ValueCollection
+        // - Count is same as lineartable
+        // - Test enumerator, sme way as above
+        // Collectin
         /* *
         Summary? summary = BenchmarkRunner.Run<BenchmarkLinearTableStruct>();
         if (summary != null) {

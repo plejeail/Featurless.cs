@@ -18,7 +18,7 @@ internal static unsafe class Tools
             case < 100:  return 2;
             case < 1000: return 3;
             default:
-                Debug.Assert(value < 10000, "I did not assumed that your source code had >10000 lines, sorry.");
+                Debug.Assert(value < 10000, "I did not assumed that your source file had >10000 lines, sorry.");
                 return 4;
         }
     }
@@ -29,8 +29,9 @@ internal static unsafe class Tools
         // to 0 before
         int threadId = Thread.CurrentThread.ManagedThreadId;
         while (threadId > 0) {
-            *destination-- = _hexDigits[threadId % 16];
-            threadId /= 16;
+            int nextVal = threadId >> 4;
+            *destination-- = _hexDigits[threadId - (nextVal << 4)];
+            threadId = nextVal;
         }
     }
 
