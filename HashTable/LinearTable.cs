@@ -24,28 +24,6 @@ public sealed class LinearTable<TKey, TValue>
         : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>, ISerializable
 {
 #nullable disable
-    /// <summary>Get a reference to the value associated with given key in <see cref="T:Featurless.LinearTable`2"/>.</summary>
-    /// <param name="key">the key of the <see cref="T:Featurless.LinearTable`2"/> entry to look for.</param>
-    /// <returns>A reference to the value associated with given key. <see cref="T:Unsafe.NullRef"/> if key is not found.</returns>
-    public ref TValue GetValueRef(TKey key) {
-        int hash = key.GetHashCode();
-        int startIndex = (int) ((uint) hash % _entries.Length);
-        for (int i = 0; i < _maxProbeSequentialLength; ++i) {
-            int currentIndex = startIndex + i;
-            if (currentIndex == _entries.Length) {
-                startIndex = -i;
-                currentIndex = 0;
-            }
-
-            ref Entry entry = ref _entries[currentIndex];
-            if (entry.HasKey((int) hash, key)) {
-                return ref entry.value;
-            }
-        }
-
-        return ref Unsafe.NullRef<TValue>();
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     internal struct Entry
     {
@@ -815,16 +793,6 @@ public sealed class LinearTable<TKey, TValue>
         } while (true);
     }
 
-    /// <summary>Adds the specified key and value to the <see cref="T:Featurless.LinearTable`2"/>.</summary>
-    /// <param name="item">A pair containing the key and the value.</param>
-    /// <remarks>
-    ///     This method does not throw if a value with the same key already exists. A duplicate value will be added instead, and will never be
-    ///     found (unless the hiding one is deleted).
-    /// </remarks>
-    public void Add(KeyValuePair<TKey, TValue> item) {
-        Add(item.Key, item.Value);
-    }
-
     /// <summary>Extremely slow, copy all elements in a bigger container.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Rehash() {
@@ -839,6 +807,16 @@ public sealed class LinearTable<TKey, TValue>
         for (int i = 0; i < _entries.Length; ++i) {
             _entries[i].CopyTo(newEntries);
         }
+    }
+
+    /// <summary>Adds the specified key and value to the <see cref="T:Featurless.LinearTable`2"/>.</summary>
+    /// <param name="item">A pair containing the key and the value.</param>
+    /// <remarks>
+    ///     This method does not throw if a value with the same key already exists. A duplicate value will be added instead, and will never be
+    ///     found (unless the hiding one is deleted).
+    /// </remarks>
+    public void Add(KeyValuePair<TKey, TValue> item) {
+        Add(item.Key, item.Value);
     }
 
     /// <summary>Removes the value with the specified key from the <see cref="T:Featurless.LinearTable`2"/> .</summary>
@@ -986,6 +964,28 @@ public sealed class LinearTable<TKey, TValue>
 
         value = default;
         return false;
+    }
+
+    /// <summary>Get a reference to the value associated with given key in <see cref="T:Featurless.LinearTable`2"/>.</summary>
+    /// <param name="key">the key of the <see cref="T:Featurless.LinearTable`2"/> entry to look for.</param>
+    /// <returns>A reference to the value associated with given key. <see cref="T:Unsafe.NullRef"/> if key is not found.</returns>
+    public ref TValue GetValueRef(TKey key) {
+        int hash = key.GetHashCode();
+        int startIndex = (int) ((uint) hash % _entries.Length);
+        for (int i = 0; i < _maxProbeSequentialLength; ++i) {
+            int currentIndex = startIndex + i;
+            if (currentIndex == _entries.Length) {
+                startIndex = -i;
+                currentIndex = 0;
+            }
+
+            ref Entry entry = ref _entries[currentIndex];
+            if (entry.HasKey((int) hash, key)) {
+                return ref entry.value;
+            }
+        }
+
+        return ref Unsafe.NullRef<TValue>();
     }
 
 #nullable enable
