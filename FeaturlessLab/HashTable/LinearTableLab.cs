@@ -186,11 +186,11 @@ public static class LinearTableLab
         LinearTable<string, int> lt = new(1000);
         tests.Require("LinearTable", "Initial capacity ok", lt.Capacity == 1000);
         tests.Require("LinearTable", "Initial count ok", lt.Count == 0);
-        tests.Require("LinearTable", "Initial keys ok", lt.Keys.Count == 0 && lt.Keys.FirstOrDefault() == null);
-        tests.Require("LinearTable", "Initial values ok", lt.Values.Count == 0 && lt.Values.FirstOrDefault() == 0);
+        tests.Check("LinearTable", "Initial keys ok", lt.Keys.Count == 0 && lt.Keys.FirstOrDefault() == null);
+        tests.Check("LinearTable", "Initial values ok", lt.Values.Count == 0 && lt.Values.FirstOrDefault() == 0);
 
         tests.Require("LinearTable", "ContainsKey Failure before adding", !lt.ContainsKey(keyTest));
-        tests.Require("LinearTable", "Contains Failure before adding", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
+        tests.Check("LinearTable", "Contains Failure before adding", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
         lt.Add(keyTest, valueTest);
         tests.Require("LinearTable", "Added element ok", lt.Capacity == 1000 && lt.Count == 1);
 
@@ -202,10 +202,26 @@ public static class LinearTableLab
         tests.Check("LinearTable", "Indexer set", lt[keyTest] == valueTest * 2);
         lt.Remove(new KeyValuePair<string, int>(keyTest, 0));
         tests.Require("LinearTable", "ContainsKey Failure after remove", !lt.ContainsKey(keyTest));
-        tests.Require("LinearTable", "Contains Failure after remove", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
+        tests.Check("LinearTable", "Contains Failure after remove", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
+        tests.Require("LinearTable", $"Count down after remove({lt.Count})", lt.Count == 0);
 
-        // Remove (then recheck contains)
-        // Add a few more items (then recheck contains)
+        lt.Add(keyTest, valueTest);
+        lt.Add("thekey", valueTest*2);
+        lt.Add("otherkey", valueTest*4);
+        lt.Add("innerkey", valueTest*8);
+        lt.Add("outerkey", valueTest*16);
+        lt.Add("oldkey", valueTest * 32);
+        lt.Add("rustedkey", valueTest * 64);
+        lt.Add("goldkey", valueTest * 128);
+
+        tests.Check("LinearTable", "Count up multiple times", lt.Count == 8);
+        tests.Require("LinearTable", "Multiple items contained success"
+                    , lt.ContainsKey(keyTest) && lt.ContainsKey("thekey") && lt.ContainsKey("otherkey")
+                   && lt.ContainsKey("innerkey") && lt.ContainsKey("outerkey") && lt.ContainsKey("oldkey")
+                   && lt.ContainsKey("rustedkey") && lt.ContainsKey("goldkey"));
+
+
+
         // TryGetValue
         // ICollection<KeyValuePair<TKey, TValue>>.CopyTo
         // Clear (then recheck contains)
