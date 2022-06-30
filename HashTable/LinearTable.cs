@@ -167,8 +167,6 @@ public sealed class LinearTable<TKey, TValue>
         /// <returns> <see langword="false"/>. </returns>
         bool ICollection.IsSynchronized { get { return false; } }
 #nullable enable
-
-#region ICollection Members
         /// <summary>Gets an object that can be used to synchronize access to the <see cref="T:System.Collections.ICollection"/>.</summary>
         /// <returns>
         ///     An object that can be used to synchronize access to the <see cref="T:System.Collections.ICollection"/>. In the default
@@ -232,9 +230,7 @@ public sealed class LinearTable<TKey, TValue>
                 default: throw new ArgumentException("Failed to copy, invalid array type.");
             }
         }
-#endregion
 
-#region ICollection<TKey> Members
         /// <summary>
         ///     Copies the <see cref="T:Featurless.LinearTable`2.KeyCollection"/> elements to an existing one-dimensional
         ///     <see cref="T:System.Array"/>, starting at the specified array index.
@@ -271,8 +267,6 @@ public sealed class LinearTable<TKey, TValue>
                 }
             }
         }
-#endregion
-
 #nullable disable
 
         /// <summary>Returns an enumerator that iterates through the <see cref="T:Featurless.LinearTable`2.KeyCollection"/>.</summary>
@@ -418,7 +412,6 @@ public sealed class LinearTable<TKey, TValue>
         bool ICollection.IsSynchronized { get { return false; } }
 #nullable enable
 
-#region ICollection Members
         /// <summary>Gets an object that can be used to synchronize access to the <see cref="T:System.Collections.ICollection"/>.</summary>
         /// <returns>
         ///     An object that can be used to synchronize access to the <see cref="T:System.Collections.ICollection"/>. In the default
@@ -482,9 +475,7 @@ public sealed class LinearTable<TKey, TValue>
                 default: throw new ArgumentException("Failed to copy, invalid array type.");
             }
         }
-#endregion
 
-#region ICollection<TValue> Members
         /// <summary>
         ///     Copies the <see cref="T:Featurless.LinearTable`2.ValueCollection"/> elements to an existing one-dimensional
         ///     <see cref="T:System.Array"/>, starting at the specified array index.
@@ -521,8 +512,6 @@ public sealed class LinearTable<TKey, TValue>
                 }
             }
         }
-#endregion
-
 #nullable disable
 
         /// <summary>Returns an enumerator that iterates through the <see cref="T:Featurless.LinearTable`2.ValueCollection"/>.</summary>
@@ -838,6 +827,7 @@ public sealed class LinearTable<TKey, TValue>
             ref Entry current = ref _entries[currentIndex];
             if (current.HasKey((int) hash, key)) {
                 current.probeSequentialLength = -1;
+                Count = Count - 1;
                 return true;
             }
         }
