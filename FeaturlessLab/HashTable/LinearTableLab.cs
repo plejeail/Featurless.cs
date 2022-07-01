@@ -183,6 +183,7 @@ public static class LinearTableLab
     public static void Run(string[] args, MiniTest tests) {
         const string keyTest = "testkey";
         const int valueTest = 13;
+
         LinearTable<string, int> lt = new(1000);
         tests.Require("LinearTable", "Initial capacity ok", lt.Capacity == 1000);
         tests.Require("LinearTable", "Initial count ok", lt.Count == 0);
@@ -205,14 +206,14 @@ public static class LinearTableLab
         tests.Check("LinearTable", "Contains Failure after remove", !lt.Contains(new KeyValuePair<string, int>(keyTest, 12)));
         tests.Require("LinearTable", $"Count down after remove({lt.Count})", lt.Count == 0);
 
-        lt.Add(keyTest, valueTest);
-        lt.Add("thekey", valueTest*2);
-        lt.Add("otherkey", valueTest*4);
-        lt.Add("innerkey", valueTest*8);
-        lt.Add("outerkey", valueTest*16);
-        lt.Add("oldkey", valueTest * 32);
+        lt.Add(keyTest,  valueTest);
+        lt.Add("thekey",  valueTest * 2);
+        lt.Add("otherkey", valueTest * 4);
+        lt.Add("innerkey", valueTest * 8);
+        lt.Add("outerkey", valueTest * 16);
+        lt.Add("oldkey",   valueTest * 32);
         lt.Add("rustedkey", valueTest * 64);
-        lt.Add("goldkey", valueTest * 128);
+        lt.Add("goldkey",   valueTest * 128);
 
         tests.Check("LinearTable", "Count up multiple times", lt.Count == 8);
         tests.Require("LinearTable", "Multiple items contained success"
@@ -220,18 +221,32 @@ public static class LinearTableLab
                    && lt.ContainsKey("innerkey") && lt.ContainsKey("outerkey") && lt.ContainsKey("oldkey")
                    && lt.ContainsKey("rustedkey") && lt.ContainsKey("goldkey"));
 
+        lt.TryGetValue("thekey", out int tgValue);
+        tests.Check("LinearTable", "TryGetValue", tgValue == valueTest * 2);
+        ref int valueRef = ref lt.GetValueRef("innerkey");
+        tests.Check("LinearTable", "GetValueRef get ref", valueRef == valueTest * 8);
+        valueRef = 17;
+        tests.Check("LinearTable", "GetValueRef set ref", lt["innerkey"] == 17);
 
+        ICollection<KeyValuePair<string, int>> icoll = lt;
+        KeyValuePair<string, int>[] kv = new KeyValuePair<string, int>[lt.Count+1];
+        kv[0] = new KeyValuePair<string, int>("nothing", 0);
+        icoll.CopyTo(kv,  1);
+        bool successCopy = kv[0].Key == "nothing" && kv[0].Value == 0;
+        int i = 1;
+        foreach(KeyValuePair<string, int> pair in icoll) {
+            successCopy &= kv[i].Key == pair.Key && kv[i].Value == pair.Value;
+            ++i;
+        }
 
-        // TryGetValue
-        // ICollection<KeyValuePair<TKey, TValue>>.CopyTo
-        // Clear (then recheck contains)
-        // GetValueRef + update ref => change value
+        tests.Check("LinearTable", "ICollection CopyTo", successCopy);
+        lt.Clear();
+        tests.Check("LinearTable", "Cleared",
+                    lt.Count == 0 && !lt.ContainsKey(keyTest) && !lt.ContainsKey("thekey")
+                        && !lt.ContainsKey("otherkey") && !lt.ContainsKey("innerkey")
+                        && !lt.ContainsKey("outerkey") && !lt.ContainsKey("oldkey")
+                        && !lt.ContainsKey("rustedkey") && !lt.ContainsKey("goldkey"));
 
-        // Enumerator: MoveNext until end, must have gone through al key/value pairs must end at the end
-        // KeyCollection/ValueCollection
-        // - Count is same as lineartable
-        // - Test enumerator, sme way as above
-        // Collectin
         /* *
         Summary? summary = BenchmarkRunner.Run<BenchmarkLinearTableStruct>();
         if (summary != null) {
