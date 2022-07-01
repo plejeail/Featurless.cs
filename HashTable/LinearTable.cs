@@ -614,7 +614,7 @@ public sealed class LinearTable<TKey, TValue>
             get {
                 if (_index >= _entries.Length || _index < 0) {
                     throw new
-                            InvalidOperationException("The enumerator is positioned before the first  or after the last element.");
+                            InvalidOperationException("The enumerator is positioned before the first or after the last element.");
                 }
 
                 return Current!;
@@ -993,7 +993,7 @@ public sealed class LinearTable<TKey, TValue>
         }
 
         for (int i = 0; i < _entries.Length; ++i) {
-            if (_entries[i].probeSequentialLength >= -1) {
+            if (_entries[i].probeSequentialLength > -1) {
                 array[index++] = new KeyValuePair<TKey, TValue>(_entries[i].key, _entries[i].value);
             }
         }
