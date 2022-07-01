@@ -6,10 +6,10 @@ using Featurless;
 public class LoggerLab
 {
     public static void Run(bool multiThread = true) {
-        RunSingleThread(200, 1000, 3);
+        RunSingleThread(2000, 1000, 3);
         if (multiThread) {
             Console.WriteLine("####################");
-            RunMultiThread(20, 10, 1000, 3);
+            RunMultiThread(20, 100, 1000, 3);
         }
     }
 

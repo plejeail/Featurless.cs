@@ -35,6 +35,7 @@ using System.Runtime.CompilerServices;
 /// <summary>Simple logger class</summary>
 public sealed class Logger : IDisposable
 {
+#nullable disable
     /// <summary>The following levels are defined in order of increasing priority: Debug, Info, Warn, Error, Off.</summary>
     public enum Level
     {
@@ -51,8 +52,8 @@ public sealed class Logger : IDisposable
     }
 
     private const long _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
-    private const long _levelStringInfo = 0x0046_004E_0049_0020L;  // INF
-    private const long _levelStringWarn = 0x004E_0052_0057_0020L;  // WRN
+    private const long _levelStringInfo  = 0x0046_004E_0049_0020L;  // INF
+    private const long _levelStringWarn  = 0x004E_0052_0057_0020L;  // WRN
     private const long _levelStringError = 0x0052_0052_0045_0020L; // ERR
     private const string _extension = ".log";
 
@@ -97,7 +98,52 @@ public sealed class Logger : IDisposable
         MapFile(_mapBytesLength);
     }
 
-#region IDisposable Members
+#pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
+    /// <summary>Write a debug record in the log file.</summary>
+    /// <param name="message">the message of the record</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Debug(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+#if !FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
+        if (MinLevel <= Level.Debug) {
+            WriteRecord(message, _levelStringDebug, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
+#endif
+    }
+
+    /// <summary>Write an information record in the log file.</summary>
+    /// <param name="message">the message of the record</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Info(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+#if !FEATURLESS_LOG_LEVEL_DISABLED_INFO
+        if (MinLevel <= Level.Information) {
+            WriteRecord(message, _levelStringInfo, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
+#endif
+    }
+
+    /// <summary>Write a warning record in the log file.</summary>
+    /// <param name="message">the message of the record</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Warning(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+#if !FEATURLESS_LOG_LEVEL_DISABLED_WARN
+        if (MinLevel <= Level.Warning) {
+            WriteRecord(message, _levelStringWarn, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
+#endif
+    }
+
+    /// <summary>Write an error record in the log file.</summary>
+    /// <param name="message">the message of the record</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Error(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+#if !FEATURLESS_LOG_LEVEL_DISABLED_ERROR
+        if (MinLevel <= Level.Error) {
+            WriteRecord(message, _levelStringError, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+        }
+#endif
+    }
+#pragma warning restore CS1573
+
     /// <summary> Release the memory map.</summary>
     public void Dispose() {
         if (_mappedFile != null) {
@@ -106,9 +152,9 @@ public sealed class Logger : IDisposable
 
         GC.SuppressFinalize(this);
     }
-#endregion
 
-    /// <summary>Write logs in the memory map with format: 'YYYY-MM-DD HH:MM:SS Level [ThreadId] @(FileName,Line) Message'.</summary>
+    /// <summary>Write logs in the memory map with format:
+    /// 'YYYY-MM-DD|HH:MM:SS| LVL |ThreadId|(FileName,Line) Message'.</summary>
     /// <param name="message">the message to write.</param>
     /// <param name="levelString">the level string hexa value.</param>
     /// <param name="callerFilePath">caller file path.</param>
@@ -134,41 +180,50 @@ public sealed class Logger : IDisposable
 
         // date
         _dateHandler.WriteDateAndTime(locationPtr);
-        *(long*) (locationPtr + 19) = levelString;
-        *(long*) (locationPtr + 23) = 0x0078_0030_005B_0020L;
-
+        locationPtr[19] = '|';
+        *(long*) (locationPtr + 20) = levelString;
+        locationPtr[24] = ' ';
+        locationPtr[25] = '|';
         // thread Id
-        *(long*) (locationPtr + 27) = 0x0030_0030_0030_0030L;
-        Tools.WriteThreadId(locationPtr + 30);
-        *(long*) (locationPtr + 31) = 0x0028_0040_0020_005DL;
+        locationPtr[26] = '0';
+        locationPtr[27] = 'x';
+        locationPtr[28] = '0';
+        locationPtr[29] = '0';
+        locationPtr[30] = '0';
+        locationPtr[31] = '0';
+        Tools.WriteThreadId(locationPtr + 31);
+        locationPtr[32] = '|';
 
+        locationPtr[33] = '(';
         // caller location
         fixed (char* callerFilePathPtr = callerFilePath) {
-            Unsafe.CopyBlock((void*) (locationPtr + 35), (void*) callerFilePathPtr
+            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 34), (void*) callerFilePathPtr
                            , (uint) (sizeof(char) * callerFilePathLength));
         }
 
         locationPtr += callerFilePathLength;
-        *(locationPtr + 35) = ',';
+        locationPtr[34] = ',';
 
-        Tools.WriteIntegerString(locationPtr + 36, lineNumber, lineDigitsCount);
+        Tools.WriteIntegerString(locationPtr + 35, lineNumber, lineDigitsCount);
         locationPtr += lineDigitsCount;
-        *(int*) (locationPtr + 36) = 0x0020_0029;
+        locationPtr[35] = ')';
+        locationPtr[36] = ' ';
+        locationPtr[37] = ' ';
 
         // write message
         fixed (char* messagePtr = message) {
-            Unsafe.CopyBlock((void*) (locationPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
+            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
         }
 
         locationPtr += messageLength;
 
         // write EOL
         if (_isWindows) {
-            *(locationPtr + 38) = '\r';
+            locationPtr[38] = '\r';
             ++locationPtr;
         }
 
-        *(locationPtr + 38) = '\n';
+        locationPtr[38] = '\n';
         Interlocked.Decrement(ref _concurrentWrites);
     }
 
@@ -297,51 +352,4 @@ public sealed class Logger : IDisposable
     ~Logger() {
         ReleaseMap(_logFileBasePath, _currentFileIndex);
     }
-#nullable disable
-
-#pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
-    /// <summary>Write a debug record in the log file.</summary>
-    /// <param name="message">the message of the record</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Debug(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
-#if !FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
-        if (MinLevel <= Level.Debug) {
-            WriteRecord(message, _levelStringDebug, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
-        }
-#endif
-    }
-
-    /// <summary>Write an information record in the log file.</summary>
-    /// <param name="message">the message of the record</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Info(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
-#if !FEATURLESS_LOG_LEVEL_DISABLED_INFO
-        if (MinLevel <= Level.Information) {
-            WriteRecord(message, _levelStringInfo, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
-        }
-#endif
-    }
-
-    /// <summary>Write a warning record in the log file.</summary>
-    /// <param name="message">the message of the record</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Warning(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
-#if !FEATURLESS_LOG_LEVEL_DISABLED_WARN
-        if (MinLevel <= Level.Warning) {
-            WriteRecord(message, _levelStringWarn, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
-        }
-#endif
-    }
-
-    /// <summary>Write an error record in the log file.</summary>
-    /// <param name="message">the message of the record</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Error(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
-#if !FEATURLESS_LOG_LEVEL_DISABLED_ERROR
-        if (MinLevel <= Level.Error) {
-            WriteRecord(message, _levelStringError, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
-        }
-#endif
-    }
-#pragma warning restore CS1573
 }

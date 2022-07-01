@@ -33,8 +33,8 @@ internal struct DateFormatter
     internal unsafe void WriteDateAndTime(char* dest) {
         ulong ticks = ComputeCurrentDate();
         WriteDate(dest, ticks);
-        *(dest + 10) = ' ';
-        WriteTime(dest, ticks);
+        dest[10] = ' ';
+        WriteTime(dest + 11, ticks);
     }
 
     /// <summary>Fast date computation using cached diff bettween locale and utc.</summary>
@@ -89,9 +89,10 @@ internal struct DateFormatter
         }
 
         // Year
-        *(int*) dest = 0x0030_0032;
+        dest[0] = '2';
+        dest[1] = '0';
         Tools.WriteSmallIntegerString(dest + 2, num2 * 400 + num4 * 100 + num6 * 4 + num8 - 30);
-        *(dest + 4) = '-';
+        dest[4] = '-';
         uint num9 = num7 - num8 * 365U;
         uint[] numArray = num8 != 3U || (num6 == 24U && num4 != 3U) ? _daysToMonth365 : _daysToMonth366;
         uint index = (num9 >> 5) + 1U;
@@ -101,7 +102,7 @@ internal struct DateFormatter
 
         // Month
         Tools.WriteSmallIntegerString(dest + 5, index);
-        *(dest + 7) = '-';
+        dest[7] = '-';
         // Day of month
         Tools.WriteSmallIntegerString(dest + 8, num9 - numArray[index - 1] + 1);
     }
@@ -112,13 +113,13 @@ internal struct DateFormatter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static unsafe void WriteTime(char* dest, ulong ticks) {
         // Hours
-        Tools.WriteSmallIntegerString(dest + 11, (uint) (ticks / 36000000000UL % 24UL));
-        *(dest + 13) = ':';
+        Tools.WriteSmallIntegerString(dest, (uint) (ticks / 36000000000UL % 24UL));
+        dest[2] = ':';
         // Minutes
-        Tools.WriteSmallIntegerString(dest + 14, (uint) (ticks / 600000000UL % 60U));
-        *(dest + 16) = ':';
+        Tools.WriteSmallIntegerString(dest + 3, (uint) (ticks / 600000000UL % 60U));
+        dest[5] = ':';
         // Seconds
-        Tools.WriteSmallIntegerString(dest + 17, (uint) (ticks / 10000000UL % 60UL));
+        Tools.WriteSmallIntegerString(dest + 6, (uint) (ticks / 10000000UL % 60UL));
     }
 
     /// <summary>Interop to get the current date</summary>

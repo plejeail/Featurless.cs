@@ -50,6 +50,7 @@ internal static unsafe class Tools
         // performs better than lookup table (< memory, same speed)
         uint ten = value / 10U;
         uint unit = value - ten * 10U;
-        *(uint*) dest = 0x30U + ten + ((0x30U + unit) << 0x10);
+        dest[0] = (char)(0x30U + ten);
+        dest[1] = (char)(0x30U + unit);
     }
 }
