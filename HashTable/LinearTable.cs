@@ -27,6 +27,7 @@ public sealed class LinearTable<TKey, TValue>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Entry
     {
+        private static readonly bool _refType = !typeof(TValue).IsValueType;
         private static readonly EqualityComparer<TKey> _keyComparer = EqualityComparer<TKey>.Default;
         private static readonly EqualityComparer<TValue> _valueComparer = EqualityComparer<TValue>.Default;
 
@@ -35,7 +36,7 @@ public sealed class LinearTable<TKey, TValue>
         internal readonly TKey key;
         internal TValue value;
 
-        public static Entry Tombstone = new(0x00000000, -1, default, default);
+        internal static Entry Tombstone = new(0x00000000, -1, default, default);
 
         internal Entry(int hash, int psl, TKey key, TValue value) {
             hashCode = hash;
@@ -66,7 +67,11 @@ public sealed class LinearTable<TKey, TValue>
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void MakeTomb() {
+        internal void MakeTomb()  {
+            if (_refType) {
+                value = default;  // default is null for ref types
+            }
+
             probeSequentialLength = -1;
         }
 
@@ -826,7 +831,7 @@ public sealed class LinearTable<TKey, TValue>
 
             ref Entry current = ref _entries[currentIndex];
             if (current.HasKey((int) hash, key)) {
-                current.probeSequentialLength = -1;
+                current.MakeTomb();
                 Count = Count - 1;
                 return true;
             }
@@ -853,7 +858,7 @@ public sealed class LinearTable<TKey, TValue>
     public void Clear() {
         Count = 0;
         for (int i = 0; i < _entries.Length; ++i) {
-            _entries[i].probeSequentialLength = -1;
+            _entries[i].MakeTomb();
         }
     }
 
