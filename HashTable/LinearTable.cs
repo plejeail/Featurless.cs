@@ -27,10 +27,6 @@ public sealed class LinearTable<TKey, TValue>
     [StructLayout(LayoutKind.Sequential)]
     internal struct Entry
     {
-        private static readonly bool _refType = !typeof(TValue).IsValueType;
-        private static readonly EqualityComparer<TKey> _keyComparer = EqualityComparer<TKey>.Default;
-        private static readonly EqualityComparer<TValue> _valueComparer = EqualityComparer<TValue>.Default;
-
         internal readonly int hashCode;
         internal int probeSequentialLength;
         internal readonly TKey key;
@@ -68,8 +64,8 @@ public sealed class LinearTable<TKey, TValue>
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void MakeTomb()  {
-            if (_refType) {
-                value = default;  // default is null for ref types
+            if (!typeof(TValue).IsValueType) {
+                value = default;  // set to null for gc
             }
 
             probeSequentialLength = -1;
@@ -77,12 +73,12 @@ public sealed class LinearTable<TKey, TValue>
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal readonly bool HasKey(int comparedHash, TKey comparedKey) {
-            return hashCode == comparedHash && probeSequentialLength != -1 && _keyComparer.Equals(key, comparedKey);
+            return hashCode == comparedHash && probeSequentialLength != -1 && EqualityComparer<TKey>.Default.Equals(key, comparedKey);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal readonly bool HasValue(TValue comparedValue) {
-            return probeSequentialLength != -1 && _valueComparer.Equals(value, comparedValue);
+            return probeSequentialLength != -1 && EqualityComparer<TValue>.Default.Equals(value, comparedValue);
         }
     }
 
