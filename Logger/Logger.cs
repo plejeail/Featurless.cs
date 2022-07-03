@@ -52,8 +52,8 @@ public sealed class Logger : IDisposable
     }
 
     private const long _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
-    private const long _levelStringInfo  = 0x0046_004E_0049_0020L;  // INF
-    private const long _levelStringWarn  = 0x004E_0052_0057_0020L;  // WRN
+    private const long _levelStringInfo  = 0x0046_004E_0049_0020L; // INF
+    private const long _levelStringWarn  = 0x004E_0052_0057_0020L; // WRN
     private const long _levelStringError = 0x0052_0052_0045_0020L; // ERR
     private const string _extension = ".log";
 
@@ -159,10 +159,10 @@ public sealed class Logger : IDisposable
     /// <param name="levelString">the level string hexa value.</param>
     /// <param name="callerFilePath">caller file path.</param>
     /// <param name="lineNumber">caller line call.</param>
-    private unsafe void WriteRecord(string message
-          , long levelString
-          , ReadOnlySpan<char> callerFilePath
-          , int lineNumber) {
+    private unsafe void WriteRecord(string message,
+                                    long levelString,
+                                    ReadOnlySpan<char> callerFilePath,
+                                    int lineNumber) {
         // size computation
         int lineDigitsCount = Tools.CountDigits(lineNumber);
         int callerFilePathLength = callerFilePath.Length;

@@ -5,21 +5,29 @@ using System.Runtime.CompilerServices;
 
 internal static unsafe class Tools
 {
-    private static readonly char[] _hexDigits = {
-            '0', '1', '2', '3', '4', '5'
-          , '6', '7', '8', '9', 'a', 'b'
-          , 'c', 'd', 'e', 'f',
+    private static readonly byte[] _hexDigits = {
+             (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5'
+           , (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'a', (byte)'b'
+           , (byte)'c', (byte)'d', (byte)'e', (byte)'f',
     };
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountDigits(int value) {
-        switch (value) {
-            case < 10:   return 1;
-            case < 100:  return 2;
-            case < 1000: return 3;
-            default:
-                Debug.Assert(value < 10000, "I did not assumed that your source file had >10000 lines, sorry.");
-                return 4;
+        if (value < 10) {
+            return 1;
+        } else if (value < 100) {
+            return 2;
+        } else if (value < 1000) {
+            return 3;
+        } else if (value < 10000) {
+            return 4;
+        } else {
+#if Debug
+            if (value < 100000) {
+                new Exception("I did not assumed that your source file had >100000 lines, sorry.");
+            }
+#endif
+            return 5;
         }
     }
 
@@ -28,11 +36,11 @@ internal static unsafe class Tools
         // hexadecimal until end of integer. (all char digits are assumed to be set
         // to 0 before
         int threadId = Thread.CurrentThread.ManagedThreadId;
-        while (threadId > 0) {
-            int nextVal = threadId >> 4;
-            *destination-- = _hexDigits[threadId - (nextVal << 4)];
+        do {
+            int nextVal = threadId / 16;
+            *destination-- = (char)_hexDigits[threadId - (nextVal * 16)];
             threadId = nextVal;
-        }
+        } while (threadId > 0);
     }
 
     internal static void WriteIntegerString(char* destination, int value, int length) {

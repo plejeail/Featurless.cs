@@ -6,26 +6,27 @@ using System.Runtime.InteropServices;
 /// <summary>Fast format locale date.</summary>
 internal struct DateFormatter
 {
-    private static readonly uint[] _daysToMonth365 = {
-            0U, 31U, 59U, 90U, 120U, 151U
-          , 181U, 212U, 243U, 273U, 304U, 334U
-          , 365U,
+    private static readonly ushort[] _daysToMonth365 = {
+            (ushort)0U,   (ushort)31U,  (ushort)59U,  (ushort)90U,  (ushort)120U, (ushort)151U
+          , (ushort)181U, (ushort)212U, (ushort)243U, (ushort)273U, (ushort)304U, (ushort)334U
+          , (ushort)365U,
     };
-    private static readonly uint[] _daysToMonth366 = {
-            0U, 31U, 60U, 91U, 121U, 152U
-          , 182U, 213U, 244U, 274U, 305U, 335U
-          , 366U,
+    private static readonly ushort[] _daysToMonth366 = {
+            (ushort)0U,   (ushort)31U,  (ushort)60U,  (ushort)91U,  (ushort)121U, (ushort)152U
+          , (ushort)182U, (ushort)213U, (ushort)244U, (ushort)274U, (ushort)305U, (ushort)335U
+          , (ushort)366U,
     };
 
     private ulong _utcLocaleDiff;
     private ulong _nextDiffLookupTime;
-    private readonly object _updateDiffLock = new();
+    private readonly object _updateDiffLock;
 
     public DateFormatter() {
         DateTime utcNow = DateTime.UtcNow;
         DateTime localeNow = utcNow.ToLocalTime();
         _utcLocaleDiff = (ulong) (localeNow - utcNow).Ticks;
         _nextDiffLookupTime = (ulong) localeNow.Date.AddDays(1).Ticks;
+        _updateDiffLock = new object();
     }
 
     /// <summary>Write date in provided memory segment. The date is in the following format: YYYY-mm-DD HH:MM:SS.</summary>
@@ -93,9 +94,9 @@ internal struct DateFormatter
         dest[1] = '0';
         Tools.WriteSmallIntegerString(dest + 2, num2 * 400 + num4 * 100 + num6 * 4 + num8 - 30);
         dest[4] = '-';
-        uint num9 = num7 - num8 * 365U;
-        uint[] numArray = num8 != 3U || (num6 == 24U && num4 != 3U) ? _daysToMonth365 : _daysToMonth366;
-        uint index = (num9 >> 5) + 1U;
+        ushort num9 = (ushort)(num7 - num8 * 365U);
+        ushort[] numArray = num8 != 3U || (num6 == 24U && num4 != 3U) ? _daysToMonth365 : _daysToMonth366;
+        uint index = ((uint)num9 >> 5) + 1U;
         while (num9 >= numArray[index]) {
             ++index;
         }
@@ -104,7 +105,7 @@ internal struct DateFormatter
         Tools.WriteSmallIntegerString(dest + 5, index);
         dest[7] = '-';
         // Day of month
-        Tools.WriteSmallIntegerString(dest + 8, num9 - numArray[index - 1] + 1);
+        Tools.WriteSmallIntegerString(dest + 8, (uint)num9 - numArray[index - 1] + 1);
     }
 
     /// <summary>Write all time elements. Adapted from .net6 implementation of DateTime properties: Hour, Minute, Second</summary>
