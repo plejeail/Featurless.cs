@@ -12,17 +12,21 @@ public static class Program
 
     public static void Main(string[] args) {
         MiniTest tests = new();
-        /* *
+        /* MINITEST *
         if (HasFlag(args, "minitest")) {
             MiniTestLab.Run(Array.Empty<string>());
         }
-        /* */
+        /* LOGGER *
         if (HasFlag(args, "logger")) {
             LoggerLab.Run();
         }
-        /* *
+        /* HASHTABLE *
         if (HasFlag(args, "hashtable")) {
             LinearTableLab.Run(Array.Empty<string>(), tests);
+        }
+        /* BENCHMARK */
+        if (HasFlag(args, "benchmark")) {
+            BenchmarkLab.Run();
         }
         /* */
         tests.Summarize();

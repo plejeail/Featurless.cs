@@ -12,13 +12,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\HashTable\HashTable.csproj"/>
-        <ProjectReference Include="..\Logger\Logger.csproj"/>
-        <ProjectReference Include="..\MiniTest\MiniTest.csproj"/>
+        <ProjectReference Include="..\Benchmark\Benchmark.csproj" />
+        <ProjectReference Include="..\HashTable\HashTable.csproj" />
+        <ProjectReference Include="..\Logger\Logger.csproj" />
+        <ProjectReference Include="..\MiniTest\MiniTest.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="BenchmarkDotNet" Version="0.13.1"/>
+        <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
     </ItemGroup>
 
 </Project>

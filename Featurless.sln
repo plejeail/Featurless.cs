@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MiniTest", "MiniTest\MiniTe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HashTable", "HashTable\HashTable.csproj", "{9AD020ED-AAA7-4367-AABF-E6ED3B9B0240}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Benchmark", "Benchmark\Benchmark.csproj", "{4E00E738-A21D-4F67-8038-B6CF6DFBB7AA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{9AD020ED-AAA7-4367-AABF-E6ED3B9B0240}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9AD020ED-AAA7-4367-AABF-E6ED3B9B0240}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9AD020ED-AAA7-4367-AABF-E6ED3B9B0240}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E00E738-A21D-4F67-8038-B6CF6DFBB7AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E00E738-A21D-4F67-8038-B6CF6DFBB7AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E00E738-A21D-4F67-8038-B6CF6DFBB7AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E00E738-A21D-4F67-8038-B6CF6DFBB7AA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
