@@ -1,6 +1,5 @@
 namespace Featurless;
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 internal static unsafe class Tools

@@ -21,9 +21,8 @@ public static class MiniTestLab
     public static void Run(string[] args) {
         using FileStream fs = File.OpenWrite("./mini-test-output.txt");
         MiniTest tests = new(args, fs) {
-                SuccessColor = ConsoleColor.Green
-              , ErrorColor = ConsoleColor.Magenta
-               ,
+                SuccessColor = ConsoleColor.Green,
+                ErrorColor = ConsoleColor.Magenta,
         };
 
         tests.MaxWidth = 80;

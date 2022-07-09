@@ -308,7 +308,7 @@ You can NOT do that: program -e group1 group3 group4 -d group2
     }
 
     /// <summary>True if all test done until now are successfule, otherwise false.</summary>
-    public bool StatusOk(string groupName = null) {
+    public bool StatusOk(string? groupName = null) {
         if (groupName != null) {
              ref Stats groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
             if (Unsafe.IsNullRef(ref groupStats)) {

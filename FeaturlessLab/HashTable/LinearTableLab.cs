@@ -4,10 +4,15 @@
 // ReSharper disable RedundantDefaultMemberInitializer
 // ReSharper disable ArrangeTypeModifiers
 // ReSharper disable NotAccessedField.Local
-
+// ReSharper disable InconsistentNaming
+// ReSharper disable RedundantJumpStatement
+// ReSharper disable EmptyConstructor
+#pragma warning disable CS8618
+#pragma warning disable CS0169
 
 namespace FeaturlessLab.HashTable;
 
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
@@ -29,6 +34,11 @@ using FeaturlessLab.HashTable;
 //	Dictionary  	ref     	25  	100 	Probe   	00ms	//
 //	Dictionary  	value   	25  	0   	Probe   	00ms	//
 //	Dictionary  	value   	25  	100 	Probe   	00ms	//
+//                                                                  //
+//	Dictionary  	ref     	25  	0   	Clear   	00ms	//
+//	Dictionary  	ref     	25  	100 	Clear   	00ms	//
+//	Dictionary  	value   	25  	0   	Clear   	00ms	//
+//	Dictionary  	value   	25  	100 	Clear   	00ms	//
 //============------------------------------------------============//
 //	LinearTable 	ref     	25  	0   	Build   	00ms	//
 //	LinearTable 	ref     	100 	0   	Build   	00ms	//
@@ -42,148 +52,74 @@ using FeaturlessLab.HashTable;
 //	LinearTable 	ref     	25  	100 	Probe   	00ms	//
 //	LinearTable 	value   	25  	0   	Probe   	00ms	//
 //	LinearTable 	value   	25  	100 	Probe   	00ms	//
+//                                                                  //
+//	LinearTable 	ref     	25  	0   	Clear   	00ms	//
+//	LinearTable 	ref     	25  	100 	Clear   	00ms	//
+//	LinearTable 	value   	25  	0   	Clear   	00ms	//
+//	LinearTable 	value   	25  	100 	Clear   	00ms	//
 //==================================================================//
-struct BigStruct
+struct BigType
 {
-    private const int _gridSize = 14;
-    private static long _denseKey = 0;
-    private static Random _rnd = new();
-    private static long _dtTicks = DateTime.UtcNow.Ticks;
-    private long _1;
-    private long _2;
-    private long _3;
-    private long _4;
-    private long _5;
-    private long _6;
-    private long _7;
-    private long _8;
+    public long x1;
+    public long x2;
+    public long x3;
+    public long x4;
+    public long x5;
+    public long x6;
+    public long x7;
+    public long x8;
 
-    public BigStruct() {
-        _1 = _dtTicks / 1;
-        _2 = _dtTicks / 2;
-        _3 = _dtTicks / 3;
-        _4 = _dtTicks / 4;
-        _5 = _dtTicks / 5;
-        _6 = _dtTicks / 6;
-        _7 = _dtTicks / 7;
-        _8 = _dtTicks / 8;
-    }
-
-    public static long GenerateDenseKey() {
-        return _denseKey++;
-    }
-
-    public static long GenerateRndKey() {
-        return _rnd.Next();
-    }
-
-    public static long GenerateGridKey() {
-        const int divMax = Int32.MaxValue / _gridSize;
-        int x1 = _rnd.Next() / divMax;
-        int x2 = _rnd.Next() / divMax;
-        int x3 = _rnd.Next() / divMax;
-        int x4 = _rnd.Next() / divMax;
-        int key = x1;
-        key |= x2 << 0x08;
-        key |= x3 << 0x10;
-        key |= x4 << 0x18;
-        return key;
+    public BigType() {
+        x1 = 12;
+        x2 = x1 * 5;
+        x3 = x2 - x1;
+        x4 = x1 + x3 - x2;
+        x5 = x1 + x2 + x4;
+        x6 = x2 * 7;
+        x7 = x3 + x6;
+        x8 = x7 / x1;
     }
 }
 
-class Reference
+class LinearTableBuildStruct
 {
-    private const int _gridSize = 14;
-    private static long _dtTicks = DateTime.UtcNow.Ticks;
-    private static long _denseKey = 0;
-    private static Random _rnd = new();
+    private const int _maxCapacity = 1000000;
+    private LinearTable<int, BigType> _lt = new(_maxCapacity);
 
-    private long _1;
-    private long _2;
-    private long _3;
-    private long _4;
-    private long _5;
-    private long _6;
-    private long _7;
-    private long _8;
+    public LinearTableBuildStruct() {}
 
-    public Reference() {
-        _1 = _dtTicks / 1;
-        _2 = _dtTicks / 2;
-        _3 = _dtTicks / 3;
-        _4 = _dtTicks / 4;
-        _5 = _dtTicks / 5;
-        _6 = _dtTicks / 6;
-        _7 = _dtTicks / 7;
-        _8 = _dtTicks / 8;
-    }
+    public void Build25() {
+        _lt.Clear();
 
-    public static long GenerateDenseKey() {
-        return _denseKey++;
-    }
-
-    public static long GenerateRndKey() {
-        return _rnd.Next();
-    }
-
-    public static long GenerateGridKey() {
-        const int divMax = Int32.MaxValue / _gridSize;
-        int x1 = _rnd.Next() / divMax;
-        int x2 = _rnd.Next() / divMax;
-        int x3 = _rnd.Next() / divMax;
-        int x4 = _rnd.Next() / divMax;
-        int key = x1;
-        key |= x2 << 0x08;
-        key |= x3 << 0x10;
-        key |= x4 << 0x18;
-        return key;
-    }
-}
-
-public class BenchmarkLinearTableStruct
-{
-    private const int _totalSize = 1_000;
-
-    private LinearTable<long, BigStruct>? _lt;
-
-    [Params(25, 100)]public int LoadFactor;
-
-    [Params(0, 100)]public int MissPercent;
-
-    [Benchmark]
-    public void PopulateDense() {
-        _lt = new LinearTable<long, BigStruct>(_totalSize);
-        int nbEntries = LoadFactor * _totalSize / 100;
-        for (int i = 0; i < nbEntries; ++i) {
-            _lt.Add(BigStruct.GenerateDenseKey(), new BigStruct());
+        for (int i = 0; i < (_maxCapacity / 4); ++i) {
+            _lt.Add(i, new BigType());
         }
     }
 
-    [Benchmark]
-    public void PopulateGrid() {
-        _lt = new LinearTable<long, BigStruct>(_totalSize);
-        int nbEntries = LoadFactor * _totalSize / 100;
-        for (int i = 0; i < nbEntries; ++i) {
-            _lt.Add(BigStruct.GenerateGridKey(), new BigStruct());
-        }
-    }
-
-    [Benchmark]
-    public void PopulateRnd() {
-        _lt = new LinearTable<long, BigStruct>(_totalSize);
-        int nbEntries = LoadFactor * _totalSize / 100;
-        for (int i = 0; i < nbEntries; ++i) {
-            _lt.Add(BigStruct.GenerateRndKey(), new BigStruct());
-        }
-    }
 }
 
 public static class LinearTableLab
 {
     public static void Run(string[] args, MiniTest tests) {
+        Test(tests);
+
+        if (!tests.StatusOk("LinearTable")) {
+            Console.WriteLine("Unable to perform linear table benchmark, tests not passed.");
+            return;
+        }
+        /* *
+        Summary? summary = BenchmarkRunner.Run<BenchmarkLinearTableStruct>();
+        if (summary != null) {
+            Console.WriteLine(summary);
+        }
+        /*/
+        // BenchmarkLinearTableStruct blts = new();
+        /* */
+    }
+
+    public static void Test(MiniTest tests) {
         const string keyTest = "testkey";
         const int valueTest = 13;
-
         LinearTable<string, int> lt = new(1000);
         tests.Require("LinearTable", "Initial capacity ok", lt.Capacity == 1000);
         tests.Require("LinearTable", "Initial count ok", lt.Count == 0);
@@ -246,14 +182,8 @@ public static class LinearTableLab
                         && !lt.ContainsKey("otherkey") && !lt.ContainsKey("innerkey")
                         && !lt.ContainsKey("outerkey") && !lt.ContainsKey("oldkey")
                         && !lt.ContainsKey("rustedkey") && !lt.ContainsKey("goldkey"));
-
-        /* *
-        Summary? summary = BenchmarkRunner.Run<BenchmarkLinearTableStruct>();
-        if (summary != null) {
-            Console.WriteLine(summary);
-        }
-        /*/
-        // BenchmarkLinearTableStruct blts = new();
-        /* */
     }
 }
+
+#pragma warning restore CS8618
+#pragma warning restore CS0169

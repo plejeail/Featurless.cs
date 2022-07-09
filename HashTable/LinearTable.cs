@@ -650,6 +650,7 @@ public sealed class LinearTable<TKey, TValue>
     private const float _growthFactor = 1.75f;
 
     private readonly Entry[] _entries;
+    private int _count;
     private KeyCollection _keys;
     private ValueCollection _values;
 
@@ -664,7 +665,7 @@ public sealed class LinearTable<TKey, TValue>
 
     /// <summary>Gets the number of key/value pairs contained in the <see cref="T:Featurless.LinearTable`2"/>.</summary>
     /// <returns>The number of key/value pairs contained in the <see cref="T:Featurless.LinearTable`2"/>.</returns>
-    public int Count { get; private set; }
+    public int Count { get { return _count; } }
 
     /// <summary>Gets a value that indicates whether the linear table is read-only.</summary>
     /// <returns>This property always returns <see langword="false"/>.</returns>
@@ -734,7 +735,7 @@ public sealed class LinearTable<TKey, TValue>
 
         _keys = null;
         _values = null;
-        Count = 0;
+        _count = 0;
     }
 
     /// <summary>Returns an enumerator that iterates through the collection.</summary>
@@ -773,7 +774,7 @@ public sealed class LinearTable<TKey, TValue>
                 ref Entry currentEntry = ref _entries[currentIndex];
                 if (currentEntry.probeSequentialLength == -1) {
                     currentEntry = new Entry(hash, currentIndex - startIndex, key, value);
-                    Count = Count + 1;
+                    _count = _count + 1;
                     return;
                 }
             }
@@ -828,7 +829,7 @@ public sealed class LinearTable<TKey, TValue>
             ref Entry current = ref _entries[currentIndex];
             if (current.HasKey((int) hash, key)) {
                 current.MakeTomb();
-                Count = Count - 1;
+                _count = _count - 1;
                 return true;
             }
         }
@@ -852,7 +853,7 @@ public sealed class LinearTable<TKey, TValue>
     ///     pressure, may want to "destroy" this instance of <see cref="T:Featurless.LinearTable`2"/> instead.
     /// </remarks>
     public void Clear() {
-        Count = 0;
+        _count = 0;
         for (int i = 0; i < _entries.Length; ++i) {
             _entries[i].MakeTomb();
         }
