@@ -52,16 +52,16 @@ public static class BenchmarkLab
         Benchmark bench = new();
         Thread.Sleep(20);
 
-        int[] arr1 = CreateArray(200);
-        int[] arr2 = CreateArray(200);
-        int[] arr3 = CreateArray(200);
-        int[] arr4 = CreateArray(200);
- //      bench.Run("test sum", "sum 1", () => Sum(arr1));
- //      bench.Run("test mult", "mult 1", () => Mult(arr2));
- //      bench.Run("test sum", "sum 2", () => Sum2(arr3));
- //      bench.Run("test mult", "mult 2",  () => Mult2(arr4));
- //      bench.Run("test sum", "sum 1", () => Sum(arr1));
- //      bench.Run("test mult", "mult 1", () => Mult(arr2));
+        int[] arr1 = CreateArray(20000);
+        int[] arr2 = CreateArray(20000);
+        int[] arr3 = CreateArray(20000);
+        int[] arr4 = CreateArray(20000);
+        bench.Run("test sum", "sum 1", () => Sum(arr1));
+        bench.Run("test mult", "mult 1", () => Mult(arr2));
+        bench.Run("test sum", "sum 2", () => Sum2(arr3));
+        bench.Run("test mult", "mult 2",  () => Mult2(arr4));
+        bench.Run("test sum", "sum 1", () => Sum(arr1));
+        bench.Run("test mult", "mult 1", () => Mult(arr2));
         bench.Run("test sum", "sum 2", () => Sum2(arr3));
         bench.Run("test mult", "mult 2", () => Mult2(arr4));
         bench.Run("test mult", "None", None);

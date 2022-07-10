@@ -25,9 +25,8 @@ public class Benchmark
 #nullable disable
     private readonly struct Stats
     {
-        internal enum Status { Ok, TooFast, NotEnoughBatches, };
+        private static readonly double _clockRatio = 1_000_000_000D / Stopwatch.Frequency;
         public readonly string Name;
-        private readonly Status _status;
         private readonly int _batchesCount;
         private readonly int _itersPerBatch;
         private readonly long _averageTime;
@@ -37,21 +36,21 @@ public class Benchmark
         private readonly long _q50;
         private readonly long _q75;
         private readonly long _q90;
-
         internal Stats(string name, int itersPerBatch, long[] ticks) {
             Name = name;
-            _status = Status.Ok;
-            _itersPerBatch = itersPerBatch;
-            Array.Sort(ticks);
 
+            _itersPerBatch = itersPerBatch;
             _batchesCount = ticks.Length;
-            _standardDeviation = 0L;
+
+            // average
             _averageTime = 0L;
             for (int i = 0; i < _batchesCount; ++i) {
                 _averageTime = _averageTime + ticks[i];
             }
             _averageTime = _averageTime / _batchesCount;
 
+            // standard deviation
+            _standardDeviation = 0L;
             for (int i = 0; i < _batchesCount; ++i) {
                 long t = (ticks[i] - _averageTime);
                 _standardDeviation += t * t;
@@ -59,36 +58,24 @@ public class Benchmark
             _standardDeviation = _standardDeviation / (_batchesCount - 1);
             _standardDeviation = (long)Math.Sqrt(_standardDeviation);
 
+            // quantiles
+            Array.Sort(ticks);
             _q10 = ticks[_batchesCount / 10];
             _q25 = ticks[_batchesCount / 4];
             _q50 = ticks[_batchesCount / 2];
             _q75 = ticks[3 * _batchesCount / 4];
             _q90 = ticks[9 * _batchesCount / 10];
         }
-        internal Stats(string name, Status status) {
-            Name = name;
-            _status = status;
-            _itersPerBatch = _batchesCount = 0;
-            _standardDeviation = _averageTime = _q10 = _q25 = _q50 = _q75 = _q90 = 0L;
-        }
 
         public string ToString(int nameLength) {
-            StringBuilder sb = new();
+            StringBuilder sb = new(nameLength + 94);
             sb.Append(Name.PadRight(nameLength));
             sb.Append("| ");
-            if (_status == Status.TooFast) {
-                sb.Append("execution is too fast.");
-                return sb.ToString();
-            } else if (_status == Status.NotEnoughBatches) {
-                sb.Append("Not enough measures.");
-                return sb.ToString();
-            }
-
             sb.Append(_batchesCount.ToString().PadLeft(7));
             sb.Append(',');
             sb.Append(_itersPerBatch.ToString().PadRight(11));
             sb.Append("| ");
-            double execsPerSec = 1_000_000D * TimeSpan.TicksPerMillisecond / _averageTime;
+            double execsPerSec = ExecsPerSecond();
             sb.Append(execsPerSec.ToString("G4").PadLeft(10));
             sb.Append("/s | ");
             sb.Append(FormatTime(_averageTime, 4));
@@ -107,115 +94,91 @@ public class Benchmark
             return sb.ToString();
         }
 
+        private double ExecsPerSecond() {
+            return (double)Stopwatch.Frequency / _averageTime;
+        }
+
         private string FormatTime(long ticks, int length) {
-            long nanos = 1_000L * ticks / TimeSpan.TicksPerMillisecond;
-            if (nanos < 1000) {
+            long nanos = (long)(_clockRatio * ticks);
+
+            if (nanos < 1000L) {
                 return nanos.ToString(CultureInfo.InvariantCulture).PadLeft(length+1) + "ns";
-            } else if (nanos < 1_000_000) {
-                double nsd = (double) nanos / 1000;
+            } else if (nanos < 1_000_000L) {
+                double nsd = (double) nanos / 1000L;
                 return nsd.ToString($"G{length}", CultureInfo.InvariantCulture).PadLeft(length + 1) + "μs";
-            } else if (nanos < 1_000_000_000) {
-                double nsd = (double) nanos / 1_000_000;
+            } else if (nanos < 1_000_000_000L) {
+                double nsd = (double) nanos / 1_000_000L;
                 return nsd.ToString($"G{length}", CultureInfo.InvariantCulture).PadLeft(length + 1) + "ms";
-            } else if (nanos < 1_000_000_000_000) {
-                double nsd = (double) nanos / 1_000_000_000;
+            } else if (nanos < 1_000_000_000_000L) {
+                double nsd = (double) nanos / 1_000_000_000L;
                 return nsd.ToString($"G{length}", CultureInfo.InvariantCulture).PadLeft(length + 1) + 's';
             } else { // #E+0
-                double nsd = (double) nanos / 1_000_000_000;
+                double nsd = (double) nanos / 1_000_000_000L;
                 return nsd.ToString("#.#e0", CultureInfo.InvariantCulture).PadLeft(length + 1) + 's';
             }
         }
     }
 
+    private const int _jitTierUpCount = 31;
+    private const int _maxBatchesCount = 5000;
+    private const int _maxItersCount = 60;
+    private const int _minItersCount = 30;
     private readonly long _maxDurationAutoBatch;
     private readonly Dictionary<string, List<Stats>> _groupValues;
 
-    public Benchmark() : this(TimeSpan.FromSeconds(30))
+    public Benchmark() : this(TimeSpan.FromSeconds(60))
     {
-
     }
 
     public Benchmark(TimeSpan autoBatchMaxDuration) {
         _groupValues = new Dictionary<string, List<Stats>>();
-        _maxDurationAutoBatch = autoBatchMaxDuration.Ticks;
+        _maxDurationAutoBatch = HigherPrecision(autoBatchMaxDuration);
 
         Thread.Sleep(200); // to be sure that tiered jit will be available
 
         // make itself candidate for tiered JIT
         _groupValues.Add(String.Empty, new List<Stats>());
-        for (int i = 0; i < 31; ++i) {
-            InternalRun(String.Empty, String.Empty, () => {}, 31, 31);
+        for (int i = 0; i < _jitTierUpCount; ++i) {
+            InternalRun(String.Empty, String.Empty, () => {}, 2, 1);
         }
         _groupValues.Remove(String.Empty);
     }
 
     public void Run(string group, string name, Action fun) {
-        // Register result
-        if (!_groupValues.ContainsKey(group)) {
-            _groupValues.Add(group, new List<Stats>());
-        }
-
         // Tiered Jit Preparation
-        for (int i = 0; i < 30; ++i) {
+        for (int i = 0; i < _jitTierUpCount; ++i) {
             fun();  // Force Tier 1 Jit
         }
 
         (int itersCountPerBatch, long batchDuration) = EstimateBatchLengthAndDuration(fun);
-        if (itersCountPerBatch == -1) {
-            _groupValues[group].Add(new Stats(name, Stats.Status.TooFast));
+
+        int batchesCount = Math.Min((int) (_maxDurationAutoBatch / batchDuration), _maxBatchesCount);
+        if (batchesCount < 30) {
+            Console.WriteLine($"[Running Benchmark] {group}.{name} Not enough batches ({batchesCount} < 30)");
             return;
         }
 
-
-        int batchesCount = Math.Min((int) (1000 * _maxDurationAutoBatch / batchDuration), 5000);
-        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {batchesCount * TimeSpan.FromTicks(batchDuration).TotalSeconds:G4}s)");
-
+        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {batchesCount * LowerPrecision(batchDuration).TotalSeconds:G4}s)");
         InternalRun(group, name, fun, batchesCount, itersCountPerBatch);
     }
 
     public void Run(string group, string name, Action fun, int batchesCount, int itersCountPerBatch) {
-        // Register result
-        if (!_groupValues.ContainsKey(group)) {
-            _groupValues.Add(group, new List<Stats>());
-        }
-        // Tiered Jit Preparation
-        for (int i = 0; i < 31; ++i) {
-            fun(); // Force Tier 1 Jit
-        }
-
-        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch})");
-
-        InternalRun(group, name, fun, batchesCount, itersCountPerBatch);
-    }
-
-    private void InternalRun(string group, string name, Action fun, int batchesCount, int itersCountPerBatch) {
         if (batchesCount < 30) {
-            _groupValues[group].Add(new Stats(name, Stats.Status.NotEnoughBatches));
+            Console.WriteLine($"[Running Benchmark] {group}.{name} Not enough batches ({batchesCount} < 30)");
             return;
         }
 
-        long[] ticks = new long[batchesCount];
-        Stopwatch timer = new();
-        for (int i = 0; i < batchesCount; ++i) {
-            timer.Restart();
-            for (int j = 0; j < itersCountPerBatch; ++j) {
-                fun();
-            }
-            ticks[i] = timer.ElapsedTicks / itersCountPerBatch;
+        if (itersCountPerBatch < 1) {
+            Console.WriteLine($"[Running Benchmark] {group}.{name} Not enough iters/batch ({itersCountPerBatch} < 1)");
+            return;
         }
 
-        // Benchmark
-        _groupValues[group].Add(new Stats(name, itersCountPerBatch, ticks));
-    }
-
-    private (int length, long duration) EstimateBatchLengthAndDuration(Action fun) {
-        Stopwatch measure = Stopwatch.StartNew();
-        fun();
-
-        measure.Stop();
-        int nbiters = (int)_maxDurationAutoBatch / (int)(measure.ElapsedTicks * 30);
-        nbiters = Math.Max(Math.Min(nbiters, 50), 30);
-        return (nbiters, nbiters * measure.ElapsedTicks);
+        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch})");
+        // Tiered Jit Preparation
+        for (int i = 0; i < _jitTierUpCount; ++i) {
+            fun(); // Force Tier 1 Jit
+        }
+        InternalRun(group, name, fun, batchesCount, itersCountPerBatch);
     }
 
     public override string ToString() {
@@ -226,6 +189,7 @@ public class Benchmark
             for (int i = 0; i < group.Value.Count; ++i) {
                 maxNameSize = Math.Max(maxNameSize, group.Value[i].Name.Length + 1);
             }
+
             int linesize = maxNameSize + 108;
             sb.Append("BENCHMARK ");
             sb.AppendLine(group.Key.ToUpper().PadRight(linesize - 10, '▁'));
@@ -234,12 +198,58 @@ public class Benchmark
             for (int i = 0; i < group.Value.Count; ++i) {
                 sb.AppendLine(group.Value[i].ToString(maxNameSize));
             }
+
             sb.AppendLine(new string('▔', linesize));
         }
 
         return sb.ToString();
     }
+    private void InternalRun(string group, string name, Action fun, int batchesCount, int itersCountPerBatch) {
+        // Register result
+        if (!_groupValues.ContainsKey(group)) {
+            _groupValues.Add(group, new List<Stats>());
+        }
 
+        // Benchmark
+        long[] ticks = new long[batchesCount];
+        Stopwatch timer = new();
+        for (int i = 0; i < batchesCount; ++i) {
+            timer.Restart();
+            for (int j = 0; j < itersCountPerBatch; ++j) {
+                fun();
+            }
+
+            timer.Stop();
+            ticks[i] = timer.ElapsedTicks / itersCountPerBatch;
+        }
+
+        // Add results
+        _groupValues[group].Add(new Stats(name, itersCountPerBatch, ticks));
+    }
+
+    private (int length, long duration) EstimateBatchLengthAndDuration(Action fun) {
+        Stopwatch measure = Stopwatch.StartNew();
+        fun();
+
+        measure.Stop();
+        int nbiters = (int)_maxDurationAutoBatch / (int)(measure.ElapsedTicks * 30);
+        nbiters = Math.Max(Math.Min(nbiters, _maxItersCount), _minItersCount);
+        return (nbiters, nbiters * measure.ElapsedTicks);
+    }
+
+    ///<summary>Convert a <see cref="System.TimeSpan"/> to <see cref="System.Diagnostics.Stopwatch"/> ticks.</summary>
+    /// <param name="time">a <see cref="System.TimeSpan"/>.</param>
+    /// <returns>the number of ticks of equivalent duration for a <see cref="System.Diagnostics.Stopwatch"/>.</returns>
+    private long HigherPrecision(TimeSpan time) {
+        return time.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
+    }
+
+    ///<summary>Convert a <see cref="System.Diagnostics.Stopwatch"/> ticks to a <see cref="System.TimeSpan"/>.</summary>
+    /// <param name="ticks">The stopwatch number of ticks.</param>
+    /// <returns>A <see cref="System.TimeSpan"/> of equivalent duration.</returns>
+    private TimeSpan LowerPrecision(long ticks) {
+        return TimeSpan.FromTicks(ticks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
+    }
     // default settings
     // settings per bench
     // stats (can select which one to display)
