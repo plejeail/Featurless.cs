@@ -1,9 +1,5 @@
-﻿// Too Fast not done => rework planning
-// nb iters => rework planning (set min to 100 if possible, i.e 100*30*exec time < max + lower if not the case)
-//               (it may help for st dev)
-// nbIters * t * nbBatch <= max
-// nbIters <= max / (t * nbBatch)
-
+﻿// Instead of running, register batches
+// Then run benchmark in random order
 
 /*
 BENCH NAME▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
@@ -18,6 +14,7 @@ namespace Featurless;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 
 public class Benchmark
@@ -133,7 +130,7 @@ public class Benchmark
     public Benchmark(TimeSpan autoBatchMaxDuration) {
         _groupValues = new Dictionary<string, List<Stats>>();
         _maxDurationAutoBatch = HigherPrecision(autoBatchMaxDuration);
-
+        SetThreadAffinity();
         Thread.Sleep(200); // to be sure that tiered jit will be available
 
         // make itself candidate for tiered JIT
@@ -211,6 +208,7 @@ public class Benchmark
         }
 
         // Benchmark
+
         long[] ticks = new long[batchesCount];
         Stopwatch timer = new();
         for (int i = 0; i < batchesCount; ++i) {
@@ -250,6 +248,25 @@ public class Benchmark
     private TimeSpan LowerPrecision(long ticks) {
         return TimeSpan.FromTicks(ticks * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
     }
+
+    private void SetThreadAffinity() {
+        ProcessThreadCollection threads = Process.GetCurrentProcess().Threads;
+        for (int i = 0; i < threads.Count; i++) {
+            if (OperatingSystem.IsWindows()) {
+                threads[i].ProcessorAffinity = (IntPtr) 0x0001;
+            }
+        }
+
+        if (OperatingSystem.IsLinux()) {
+            ulong processorMask = 0x0001UL;
+            sched_setaffinity(0, new IntPtr(sizeof(ulong)), ref processorMask);
+        }
+    }
+
+
+    [DllImport("libc.so.6", SetLastError = true)]
+    private extern static int sched_setaffinity(int pid, IntPtr cpusetsize, ref ulong cpuset);
+
     // default settings
     // settings per bench
     // stats (can select which one to display)
