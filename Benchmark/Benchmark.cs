@@ -1,7 +1,19 @@
 ﻿// Too Fast not done => rework planning
 // nb iters => rework planning (set min to 100 if possible, i.e 100*30*exec time < max + lower if not the case)
 //               (it may help for st dev)
-//
+// nbIters * t * nbBatch <= max
+// nbIters <= max / (t * nbBatch)
+
+
+/*
+BENCH NAME▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+name   | batches,iterations | Executions/s | Average |   Min   |   Q25%  |   Q50%  |   Q75%  |   Max   | St. Dev.
+{name} | 0000000,0000000000 | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un
+{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un
+{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un
+{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+*/
 namespace Featurless;
 
 using System.Diagnostics;
@@ -149,13 +161,15 @@ public class Benchmark
         }
 
         (int itersCountPerBatch, long batchDuration) = EstimateBatchLengthAndDuration(fun);
-        Debug.Assert(itersCountPerBatch != 0, "batch size should not be 0");
         if (itersCountPerBatch == -1) {
             _groupValues[group].Add(new Stats(name, Stats.Status.TooFast));
             return;
         }
 
-        int batchesCount = Math.Min((int)(_maxDurationAutoBatch / batchDuration), 10000);
+
+        int batchesCount = Math.Min((int) (1000 * _maxDurationAutoBatch / batchDuration), 5000);
+        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {batchesCount * TimeSpan.FromTicks(batchDuration).TotalSeconds:G4}s)");
+
         InternalRun(group, name, fun, batchesCount, itersCountPerBatch);
     }
 
@@ -168,6 +182,8 @@ public class Benchmark
         for (int i = 0; i < 31; ++i) {
             fun(); // Force Tier 1 Jit
         }
+
+        Console.WriteLine($"[Running Benchmark] {group}.{name} ({batchesCount}x{itersCountPerBatch})");
 
         InternalRun(group, name, fun, batchesCount, itersCountPerBatch);
     }
@@ -195,38 +211,24 @@ public class Benchmark
     private (int length, long duration) EstimateBatchLengthAndDuration(Action fun) {
         Stopwatch measure = Stopwatch.StartNew();
         fun();
+
         measure.Stop();
-
-        if (measure.ElapsedTicks >= 100) {
-            return (1, measure.ElapsedTicks);
-        } else if (measure.ElapsedTicks > 0) {
-            return (1 + 100 / (int)measure.ElapsedTicks, measure.ElapsedTicks);
-        }
-
-        measure.Restart();
-        for (int i = 0; i < 100; ++i) {
-            fun();
-        }
-        measure.Stop();
-
-        if (measure.ElapsedTicks >= 100) {
-            return (100, measure.ElapsedTicks);
-        } else if (measure.ElapsedTicks > 0) {
-            return (100 + 100 / (int) measure.ElapsedTicks, measure.ElapsedTicks);
-        } else {
-            return (-1, -1);
-        }
+        int nbiters = (int)_maxDurationAutoBatch / (int)(measure.ElapsedTicks * 30);
+        nbiters = Math.Max(Math.Min(nbiters, 50), 30);
+        return (nbiters, nbiters * measure.ElapsedTicks);
     }
 
     public override string ToString() {
-        StringBuilder sb = new(1280);
+        StringBuilder sb = new(1000);
         foreach (KeyValuePair<string, List<Stats>> group in _groupValues) {
+            sb.AppendLine();
             int maxNameSize = 5;
             for (int i = 0; i < group.Value.Count; ++i) {
                 maxNameSize = Math.Max(maxNameSize, group.Value[i].Name.Length + 1);
             }
             int linesize = maxNameSize + 108;
-            sb.AppendLine(group.Key.PadRight(linesize, '▁'));
+            sb.Append("BENCHMARK ");
+            sb.AppendLine(group.Key.ToUpper().PadRight(linesize - 10, '▁'));
             sb.Append("Name".PadRight(maxNameSize));
             sb.AppendLine("| batches,iterations | Executions/s | Average |   Q10%  |   Q25%  |   Q50%  |   Q75%  |   Q90%  | St. Dev.");
             for (int i = 0; i < group.Value.Count; ++i) {
@@ -238,15 +240,6 @@ public class Benchmark
         return sb.ToString();
     }
 
-/*
-▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-name   | batches,iterations | Executions/s | Average |   Min   |   Q25%  |   Q50%  |   Q75%  |   Max   | St. Dev. | Significant
-{name} | 0000000,0000000000 | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un  |      —
-{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un  |      ✔      
-{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un  |      ✘      
-{name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un  |      ✔      
-▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
-*/
     // default settings
     // settings per bench
     // stats (can select which one to display)
@@ -269,6 +262,7 @@ name   | batches,iterations | Executions/s | Average |   Min   |   Q25%  |   Q50
     // before running the actual benchmark, we run an estimating un.
     // the estimated time will help determine the execution plan.
     // Perform p (nb iters per batch) estimation:
+    // nbIters = min(max / (t * nbBatch), 100)
     // if 'estimated time' >= 10 * clock precision
     //     1. p is 1
     // else
