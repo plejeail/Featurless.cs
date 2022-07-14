@@ -104,7 +104,7 @@ public class Benchmarker
         /// </summary>
         /// <returns> The string representation of this instance. </returns>
         public override string ToString() {
-            return Group + "::" + _name + " (" + _measuresCount + 'x' + _itersPerMeasure +')';
+            return $"{Group}::{_name} ({_measuresCount}x{_itersPerMeasure})";
         }
 
         /// <summary> Run the benchmark. </summary>
@@ -152,24 +152,26 @@ public class Benchmarker
             Name = name;
             Order = order;
             _itersPerMeasure = itersPerMeasure;
-            _measuresCount = measures.Length;
+            _measuresCount = measures.Length - 1;
+
+            Array.Sort(measures);
+
 
             long avg = 0;
-            for (int i = 0; i < measures.Length; ++i) {
+            for (int i = 0; i < _measuresCount; ++i) {
                 avg = avg + measures[i];
             }
             avg = avg / measures.Length;
             _average = avg;
 
             long stdev = 0;
-            for (int i = 0; i < measures.Length; ++i) {
+            for (int i = 0; i < _measuresCount; ++i) {
                 long value = measures[i] - avg;
                 stdev = stdev + value * value;
             }
-            stdev = stdev / (measures.Length - 1);
-            _stdev = stdev;
+            stdev = stdev / (_measuresCount - 1);
+            _stdev = (long)Math.Sqrt(stdev);
 
-            Array.Sort(measures);
             _q10 = measures[measures.Length / 10];
             _q25 = measures[measures.Length / 4];
             _q50 = measures[measures.Length / 2];
@@ -180,7 +182,7 @@ public class Benchmarker
         /// <summary> Re-compute total benchmarking time. </summary>
         /// <returns> Formatted string of the benchmark running time. </returns>
         internal string GetTotalRunningTime() {
-            return FormatTicks(_average * _itersPerMeasure * _measuresCount, 5);
+            return FormatTicks(_average * _itersPerMeasure * _measuresCount);
         }
 
         /// <summary> Add the benchmark formated statistics line to given string builder. </summary>
@@ -194,22 +196,21 @@ public class Benchmarker
             sb.Append(',');
             sb.Append(_itersPerMeasure.ToString().PadRight(11));
             sb.Append("| ");
-            double execsPerSec = ExecsPerSecond();
-            sb.Append(execsPerSec.ToString("G4").PadLeft(10));
+            sb.Append(ExecsPerSecond().ToString("G4").PadLeft(10));
             sb.Append("/s | ");
-            sb.Append(FormatTicks(_average, 4));
+            sb.Append(FormatTicks(_average));
             sb.Append(" | ");
-            sb.Append(FormatTicks(_q10, 4));
+            sb.Append(FormatTicks(_q10));
             sb.Append(" | ");
-            sb.Append(FormatTicks(_q25, 4));
+            sb.Append(FormatTicks(_q25));
             sb.Append(" | ");
-            sb.Append(FormatTicks(_q50, 4));
+            sb.Append(FormatTicks(_q50));
             sb.Append(" | ");
-            sb.Append(FormatTicks(_q75, 4));
+            sb.Append(FormatTicks(_q75));
             sb.Append(" | ");
-            sb.Append(FormatTicks(_q90, 4));
+            sb.Append(FormatTicks(_q90));
             sb.Append(" | ");
-            sb.AppendLine(FormatTicks(_stdev, 4));
+            sb.AppendLine(FormatTicks(_stdev));
         }
 
         /// <summary> Compute the ExecsPerSecond statistic. </summary>
@@ -221,22 +222,21 @@ public class Benchmarker
 
         /// <summary> Convert a number of stopwatch ticks to the appropriate time unit. </summary>
         /// <param name="ticks"> The number of ticks to convert. </param>
-        /// <param name="length"> the length of the string to return. </param>
         /// <returns> A formated string represented the number of ticks. </returns>
-        private string FormatTicks(long ticks, int length) {
-            long nanos = (long) ((1_000_000_000D / Stopwatch.Frequency) * ticks);
+        private static string FormatTicks(long ticks) {
+            long nanos  = (long) (1_000_000_000D / Stopwatch.Frequency) * ticks;
 
             if (nanos < 1000L) {
-                return nanos.ToString(CultureInfo.InvariantCulture).PadLeft(length + 1) + "ns";
+                return nanos.ToString(CultureInfo.InvariantCulture).PadLeft(5) + "ns";
             } else if (nanos < 1_000_000L) {
                 double nsd = (double) nanos / 1000L;
-                return nsd.ToString("G" + length, CultureInfo.InvariantCulture).PadLeft(length + 1) + "μs";
+                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "μs";
             } else if (nanos < 1_000_000_000L) {
                 double nsd = (double) nanos / 1_000_000L;
-                return nsd.ToString("G" + length, CultureInfo.InvariantCulture).PadLeft(length + 1) + "ms";
+                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "ms";
             } else {
                 double nsd = (double) nanos / 1_000_000_000L;
-                return nsd.ToString("G" + length, CultureInfo.InvariantCulture).PadLeft(length + 1) + 's';
+                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + 's';
             }
         }
     }
@@ -265,9 +265,11 @@ public class Benchmarker
         _stats = new Dictionary<string, List<Statistics>>();
         _maxDurationAutoBench = ToStopwatchTicks(autoBenchMaxDuration);
 
-        SetThreadAffinity();
         // tiered compilation trigger only if the JIT did not compiled anything for at least 100ms.
         Thread.Sleep(200);
+
+        BenchmarkPlannning emptyPlan = new(null, null, () => {}, new BenchmarkOptions(30, 30));
+        JitOptimize(() => { emptyPlan.Run(); });
     }
 
     /// <summary> Register a <see cref="System.Action"/> benchmark. The benchmark plan is automatically done. </summary>
@@ -289,8 +291,8 @@ public class Benchmarker
             return;
         }
 
-        double estimatedTime = batchesCount * MaxDurationAutoConfig.TotalSeconds;
-        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {estimatedTime:G4}s)");
+        TimeSpan estimatedTime =  ToTimeSpan(batchesCount * batchDuration);
+        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {estimatedTime.TotalSeconds:G4}s)");
         _plans.Add(new BenchmarkPlannning(group, name, fun, new BenchmarkOptions(batchesCount, itersCountPerBatch)));
     }
 
@@ -356,16 +358,15 @@ public class Benchmarker
                 maxNameSize = Math.Max(maxNameSize, group.Value[i].Name.Length + 1);
             }
 
-            int linesize = maxNameSize + 106;
             sb.Append("BENCHMARK▁");
-            sb.AppendLine(group.Key.ToUpper().Replace(' ', '▁').PadRight(linesize - 10, '▁'));
+            sb.AppendLine(group.Key.ToUpper().Replace(' ', '▁').PadRight(maxNameSize + 96, '▁'));
             sb.Append("Name".PadRight(maxNameSize));
             sb.AppendLine("| batches,iterations | Executions/s | Average |   Q10%  |   Q25%  |   Q50%  |   Q75%  |   Q90%  | St. Dev.");
             for (int i = 0; i < group.Value.Count; ++i) {
                 group.Value[i].AppendToString(sb, maxNameSize);
             }
 
-            sb.AppendLine(new string('▔', linesize));
+            sb.AppendLine(new string('▔', maxNameSize + 106));
         }
 
         return sb.ToString();
@@ -418,25 +419,4 @@ public class Benchmarker
             action();
         }
     }
-
-    /// <summary>
-    /// Set this tread affinity to processor 0x0000
-    /// </summary>
-    private static void SetThreadAffinity() {
-        ProcessThreadCollection threads = Process.GetCurrentProcess().Threads;
-        for (int i = 0; i < threads.Count; i++) {
-            if (OperatingSystem.IsWindows()) {
-                threads[i].ProcessorAffinity = (IntPtr) 0x0000;
-            }
-        }
-
-        if (OperatingSystem.IsLinux()) {
-            ulong processorMask = 0x0000UL;
-            sched_setaffinity(0, new IntPtr(sizeof(ulong)), ref processorMask);
-        }
-    }
-
-    // Linux interop ...............................................................................
-    [DllImport("libc.so.6", SetLastError = true)]
-    private extern static int sched_setaffinity(int pid, IntPtr cpusetsize, ref ulong cpuset);
 }
