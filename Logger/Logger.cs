@@ -1,41 +1,10 @@
-﻿//===-- Logger.cs -----------------------------------------------------------------------------===//
-//
-// Experimenting with memory maps, because why not ?
-//
-// The Logger class provide an alternative logging tool. This tool include the following features:
-// - logging in a file ( in console)
-// - file rolling based on file size
-//
-// Code Example:
-// public static void UsageExample() {
-//     Featurless.Logger logger = new Featurless.Logger(logFolderPath: "/path/to/my/folder"
-//                                                     , logNameWithoutExt: "justMyFilename"
-//                                                     , maxSizeInKB: 10000 // 1MB
-//                                                     , maxNumberOfFiles: 7);
-//      logger.Debug("Ok i'm recorded :)");
-//      logger.MinLevel = Featurless.Logger.Level.Warning;
-//      logger.Debug("I'm not recorded :(");
-//      logger.Error("I'm recorded :p");
-// }
-// And that's all.
-
-// define constants to disable logs in code
-// #define FEATURLESS_LOG_LEVEL_DISABLED_TRACE
-// #define FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
-// #define FEATURLESS_LOG_LEVEL_DISABLED_INFO
-// #define FEATURLESS_LOG_LEVEL_DISABLED_WARN
-// #define FEATURLESS_LOG_LEVEL_DISABLED_ERROR
-
-
 namespace Featurless;
 
-using System.IO.MemoryMappedFiles;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
-/// <summary>Simple logger class</summary>
 public sealed class Logger : IDisposable
 {
-#nullable disable
     /// <summary>The following levels are defined in order of increasing priority: Debug, Info, Warn, Error, Off.</summary>
     public enum Level
     {
@@ -51,54 +20,69 @@ public sealed class Logger : IDisposable
         Off,
     }
 
-    private const long _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
-    private const long _levelStringInfo  = 0x0046_004E_0049_0020L; // INF
-    private const long _levelStringWarn  = 0x004E_0052_0057_0020L; // WRN
-    private const long _levelStringError = 0x0052_0052_0045_0020L; // ERR
-    private const string _extension = ".log";
+    private const int    _bufferLength     = 65536 / sizeof(char);
+    private const long   _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
+    private const long   _levelStringInfo  = 0x0046_004E_0049_0020L; // INF
+    private const long   _levelStringWarn  = 0x004E_0052_0057_0020L; // WRN
+    private const long   _levelStringError = 0x0052_0052_0045_0020L; // ERR
+    private const string _extension        = ".log";
 
-    private static readonly bool _isWindows = Environment.OSVersion.Platform == PlatformID.Win32S
-                                           || Environment.OSVersion.Platform == PlatformID.Win32Windows
-                                           || Environment.OSVersion.Platform == PlatformID.Win32NT
-                                           || Environment.OSVersion.Platform == PlatformID.WinCE;
-    private readonly string _logFileBasePath;
+    private readonly bool       _osIsUnix;
+    private readonly long       _maxFileSize;
+    private readonly int        _maxNumberOfFiles;
+    private readonly object     _lockBuffer;
+    private readonly object     _lockFile;
+    private unsafe   int*       _fileHandle;
+    private readonly string     _logFileBasePath;
     private readonly Queue<int> _logFilePathes;
 
-    private readonly int _maxNumberOfFiles;
-    private readonly object _rollingLock = new();
-    private int _concurrentWrites;
-    private int _currentFileIndex;
     private DateFormatter _dateHandler;
-    private unsafe byte* _handlePtr;
-    private long _headOffset;
-    private long _mapBytesLength;
-    private MemoryMappedFile _mappedFile;
-    private MemoryMappedViewAccessor _mapView;
+
+    private int    _writtenBufferChars;
+    private long   _currentFileSize;
+    private char[] _buffer;
+    private int    _currentFileIndex;
+    private int    _concurrentWrites;
 
     /// <summary>Log with a lower priority level are not written. Log everything by default.</summary>
     public Level MinLevel = Level.Debug;
 
-    /// <summary>Create a logger instance.</summary>
-    /// <param name="logFolderPath">folder in which log files are written.</param>
-    /// <param name="logNameWithoutExt">name of the log files without extension.</param>
-    /// <param name="maxSizeInKB">maximum size of a log file.</param>
-    /// <param name="maxNumberOfFiles">maximum number of log files.</param>
-    // ReSharper disable once InconsistentNaming (maxSizeKB => kilobyte)
-    public Logger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB, int maxNumberOfFiles) {
+    // ReSharper disable once InconsistentNaming fileSizeInKB
+    public Logger(string logFolderPath, string logNameWithoutExt, int fileSizeInKB, int maxNumberOfFiles) {
+        unsafe { _fileHandle = null; }
+        _osIsUnix = Environment.OSVersion.Platform == PlatformID.Unix
+                 || Environment.OSVersion.Platform == PlatformID.MacOSX;
         _dateHandler = new DateFormatter();
-        _headOffset = 0L;
-        _mapBytesLength = 1000L * (long) maxSizeInKB;
+        _concurrentWrites = _writtenBufferChars = 0;
+        _currentFileSize = 0L;
         _maxNumberOfFiles = maxNumberOfFiles;
+        _maxFileSize = fileSizeInKB * 1000L / sizeof(char);
+        _buffer = new char[_bufferLength];
+        _lockBuffer = new object();
+        _lockFile = new object();
 
-        _logFileBasePath = Path.Combine(logFolderPath, logNameWithoutExt);
-        string[] files = Directory.GetFiles(logFolderPath, logNameWithoutExt + ".*.log");
+        _logFileBasePath = Path.Combine(logFolderPath, logNameWithoutExt + '.');
+        string[]  files   = Directory.GetFiles(logFolderPath, logNameWithoutExt + ".*.log");
         List<int> indices = LookForFileIndices(files);
         _logFilePathes = new Queue<int>(indices);
         _currentFileIndex = indices.Count > 0 ? indices[^1] : 0;
-        MapFile(_mapBytesLength);
+
+        if (_osIsUnix) {
+            //_ = SetLocaleUnix(0, "en_US.UTF-8");
+        } else {
+            if (Environment.OSVersion.Platform != PlatformID.Win32S
+                    && Environment.OSVersion.Platform != PlatformID.Win32Windows
+                    && Environment.OSVersion.Platform != PlatformID.Win32NT
+                    && Environment.OSVersion.Platform != PlatformID.WinCE) {
+                throw new NotSupportedException("Your operating system does not seems to be supported.");
+            }
+            //throw new NotImplementedException();
+        }
+
+        OpenFile();
     }
 
-#pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
+    #pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
     /// <summary>Write a debug record in the log file.</summary>
     /// <param name="message">the message of the record</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -142,19 +126,13 @@ public sealed class Logger : IDisposable
         }
 #endif
     }
+
 #pragma warning restore CS1573
 
-    /// <summary> Release the memory map.</summary>
-    public void Dispose() {
-        if (_mappedFile != null) {
-            ReleaseMap(_logFileBasePath, _currentFileIndex);
-        }
-
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>Write logs in the memory map with format:
-    /// 'YYYY-MM-DD|HH:MM:SS| LVL |ThreadId|(FileName,Line) Message'.</summary>
+    /// <summary>
+    /// Write logs in the memory map with format:
+    /// 'YYYY-MM-DD|HH:MM:SS| LVL |ThreadId|(FileName,Line) Message'.
+    /// </summary>
     /// <param name="message">the message to write.</param>
     /// <param name="levelString">the level string hexa value.</param>
     /// <param name="callerFilePath">caller file path.</param>
@@ -164,86 +142,190 @@ public sealed class Logger : IDisposable
                                     ReadOnlySpan<char> callerFilePath,
                                     int lineNumber) {
         // size computation
-        int lineDigitsCount = Tools.CountDigits(lineNumber);
+        int lineDigitsCount      = Tools.CountDigits(lineNumber);
         int callerFilePathLength = callerFilePath.Length;
-        int messageLength = message.Length;
-        int recordByteLength = ComputeRecordSize(messageLength + callerFilePathLength + lineDigitsCount);
-
-        // reserve map segment to write
-        if (_headOffset + recordByteLength * sizeof(char) > _mapBytesLength) {
-            RollFile(recordByteLength);
+        int messageLength        = message.Length;
+        int recordByteLength;
+        if (_osIsUnix) {
+            recordByteLength = ComputeRecordSizeUnix(messageLength + callerFilePathLength + lineDigitsCount);
+        } else {
+            recordByteLength = ComputeRecordSizeWindows(messageLength + callerFilePathLength + lineDigitsCount);
         }
 
-        Interlocked.Increment(ref _concurrentWrites);
-        long currentOffset = Interlocked.Add(ref _headOffset, recordByteLength) - recordByteLength;
-        char* locationPtr = (char*) (_handlePtr + currentOffset);
-
+        char* writeRecordPtr = stackalloc char[recordByteLength];
+        char* editRecordPtr = writeRecordPtr;
         // date
-        _dateHandler.WriteDateAndTime(locationPtr);
-        locationPtr[19] = '|';
-        *(long*) (locationPtr + 20) = levelString;
-        locationPtr[24] = ' ';
-        locationPtr[25] = '|';
+        _dateHandler.WriteDateAndTime(editRecordPtr);
+        editRecordPtr[19] = '|';
+        *(long*) (editRecordPtr + 20) = levelString;
+        editRecordPtr[24] = ' ';
+        editRecordPtr[25] = '|';
         // thread Id
-        locationPtr[26] = '0';
-        locationPtr[27] = 'x';
-        locationPtr[28] = '0';
-        locationPtr[29] = '0';
-        locationPtr[30] = '0';
-        locationPtr[31] = '0';
-        Tools.WriteThreadId(locationPtr + 31);
-        locationPtr[32] = '|';
-
-        locationPtr[33] = '(';
+        editRecordPtr[26] = '0';
+        editRecordPtr[27] = 'x';
+        editRecordPtr[28] = '0';
+        editRecordPtr[29] = '0';
+        editRecordPtr[30] = '0';
+        editRecordPtr[31] = '0';
+        Tools.WriteThreadId(editRecordPtr + 31);
+        editRecordPtr[32] = '|';
+        editRecordPtr[33] = '(';
         // caller location
         fixed (char* callerFilePathPtr = callerFilePath) {
-            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 34), (void*) callerFilePathPtr
+            Unsafe.CopyBlockUnaligned((void*) (editRecordPtr + 34), (void*) callerFilePathPtr
                            , (uint) (sizeof(char) * callerFilePathLength));
         }
+        editRecordPtr += callerFilePathLength;
+        editRecordPtr[34] = ',';
 
-        locationPtr += callerFilePathLength;
-        locationPtr[34] = ',';
-
-        Tools.WriteIntegerString(locationPtr + 35, lineNumber, lineDigitsCount);
-        locationPtr += lineDigitsCount;
-        locationPtr[35] = ')';
-        locationPtr[36] = ' ';
-        locationPtr[37] = ' ';
+        Tools.WriteIntegerString(editRecordPtr + 35, lineNumber, lineDigitsCount);
+        editRecordPtr += lineDigitsCount;
+        editRecordPtr[35] = ')';
+        editRecordPtr[36] = ' ';
+        editRecordPtr[37] = ' ';
 
         // write message
         fixed (char* messagePtr = message) {
-            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
+            Unsafe.CopyBlockUnaligned((void*) (editRecordPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
         }
-
-        locationPtr += messageLength;
+        editRecordPtr += messageLength;
 
         // write EOL
-        if (_isWindows) {
-            locationPtr[38] = '\r';
-            ++locationPtr;
+        if (!_osIsUnix) {
+            editRecordPtr[38] = '\r';
+            ++editRecordPtr;
+        }
+        editRecordPtr[38] = '\n';
+
+
+        WriteBuffer(writeRecordPtr, recordByteLength);
+    }
+
+    private unsafe void WriteBuffer(char* data, int length) {
+        if (length > _bufferLength) {
+            lock (_lockFile) {
+                WriteFile(data, length);
+            }
+            _currentFileSize += _bufferLength;
+            return;
         }
 
-        locationPtr[38] = '\n';
+        long offset = GetBufferOffset(length);
+        Interlocked.Increment(ref _concurrentWrites);
+        fixed (char* bufPtr = _buffer) {
+            Unsafe.CopyBlockUnaligned((void*) (bufPtr + offset), (void*) data, (uint)length * 2);
+        }
         Interlocked.Decrement(ref _concurrentWrites);
     }
 
-    /// <summary>The first thread to enter roll the log file. Following threads wait until rolling end.</summary>
-    /// <param name="recordByteLength">size in bytes of the record</param>
-    private void RollFile(long recordByteLength) {
-        lock (_rollingLock) {
-            if (_headOffset + recordByteLength * sizeof(char) <= _mapBytesLength) {
-                // already rolled
-                return;
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private unsafe int GetBufferOffset(int length) {
+        int offset = Interlocked.Add(ref _writtenBufferChars, length) - length;
+        while (offset + length > _bufferLength) {
+            char[] localBufferRef = null;
+            int    charsToWrite   = 0;
+            lock (_lockBuffer) {
+                // update buffer
+                if (_writtenBufferChars + length > _bufferLength) {
+                    localBufferRef = _buffer;
+                    WaitForWritesEnd();
+                    _buffer = new char[_bufferLength];
+                    charsToWrite = offset;
+                    _writtenBufferChars = 0;
+                }
             }
 
-            long backupMapLength = _mapBytesLength;
-            _mapBytesLength = 0L; // forbid new writes
-            WaitForWritesEnd();
-            _currentFileIndex += 1;
-            MapFile(backupMapLength);
-            _headOffset = 0;
-            _mapBytesLength = backupMapLength; // reenable writes
+            if (localBufferRef != null) {
+                lock (_lockFile) {
+                    // rotate
+                    if (_currentFileSize + _writtenBufferChars > _maxFileSize) {
+                        RollFile();
+                    }
+                    // write file
+                    fixed (char* bufPtr = localBufferRef) {
+                        WriteFile(bufPtr, charsToWrite);
+                    }
+                    _currentFileSize += charsToWrite;
+                }
+            }
+
+            offset = Interlocked.Add(ref _writtenBufferChars, length) - length;
         }
+        return offset;
+    }
+
+    private void RollFile() {
+        CloseFile();
+        _currentFileIndex += 1;
+        _logFilePathes.Enqueue(_currentFileIndex);
+        if (_logFilePathes.Count > _maxNumberOfFiles) {
+            int    toDeleteIdx = _logFilePathes.Dequeue();
+            string fileToDel   = GetLogFilePath(_logFileBasePath, toDeleteIdx);
+            if (File.Exists(fileToDel)) {
+                File.Delete(fileToDel);
+            }
+        }
+
+        OpenFile();
+    }
+
+    private unsafe void CloseFile() {
+        if (_fileHandle == null) {
+            return;
+        }
+
+        if (_osIsUnix) {
+            CloseFileUnix(_fileHandle);
+        } else {
+            CloseFileWindows(_fileHandle);
+        }
+
+        _fileHandle = null;
+    }
+
+    /// <summary>Extract file indices in an array of log files names</summary>
+    /// <param name="logFiles">the list of files. Assumed to contain only log files.</param>
+    /// <returns>a list containing the sorted indices.</returns>
+    private static List<int> LookForFileIndices(string[] logFiles) {
+        List<int> indices = new(logFiles.Length);
+        for (int i = 0; i < logFiles.Length; ++i) {
+            string filePath = logFiles[i];
+            //System.Diagnostics.Debug.Assert(filePath.Length > 4, "too small for a log file");
+            int indexEndDot = filePath.Length - _extension.Length;
+
+            int indexStartDot = filePath.LastIndexOf('.', indexEndDot - 1) + 1;
+            //System.Diagnostics.Debug.Assert(indexStartDot != 0, "logFiles should contains only log files.");
+            if (Int32.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot), out int index)) {
+                indices.Add(index);
+            }
+        }
+
+        indices.Sort();
+        return indices;
+    }
+
+    private unsafe void OpenFile() {
+        System.Diagnostics.Debug.Assert(_fileHandle == null, "File must be closed before opening another one.");
+        string filename = GetLogFilePath(_logFileBasePath, _currentFileIndex);
+
+        if (_osIsUnix) {
+            _fileHandle = OpenFileUnix(filename, "a");
+        } else {
+            _fileHandle = OpenFileWindows(filename, "a");
+        }
+
+        if (_fileHandle == null) {
+            throw new IOException("failed to open file " + filename);
+        }
+
+        // disable os buffering
+        if (_osIsUnix) {
+            SetFileBufferUnix(_fileHandle, null);
+        } else {
+            SetFileBufferWindows(_fileHandle, null);
+        }
+
+        _currentFileSize = GetCursorPosition();
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -258,98 +340,96 @@ public sealed class Logger : IDisposable
         } while (true);
     }
 
-    /// <summary>Extract file indices in an array of log files names</summary>
-    /// <param name="logFiles">the list of files. Assumed to contain only log files.</param>
-    /// <returns>a list containing the sorted indices.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static List<int> LookForFileIndices(string[] logFiles) {
-        List<int> indices = new(logFiles.Length);
-        for (int i = 0; i < logFiles.Length; ++i) {
-            string filePath = logFiles[i];
-            System.Diagnostics.Debug.Assert(filePath.Length > 4, "too small for a log file");
-            int indexEndDot = filePath.Length - _extension.Length;
-
-            int indexStartDot = filePath.LastIndexOf('.', indexEndDot - 1) + 1;
-            System.Diagnostics.Debug.Assert(indexStartDot != 0, "logFiles should contains only log files.");
-            if (Int32.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot), out int index)) {
-                indices.Add(index);
-            }
-        }
-
-        indices.Sort();
-        return indices;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ComputeRecordSize(int dynamicLength) {
-        if (_isWindows) { // '\r\n'
-            return 80 + dynamicLength * sizeof(char);
-        } // '\n'
-
-        return 78 + dynamicLength * sizeof(char);
-        // return (Environment.NewLine.Length + 38 + dynamicLength) * sizeof(char);
-    }
-
-    private static string GetLogFilePath(string filePath, int index) {
-        return $"{filePath}.{index}{_extension}";
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private unsafe void MapFile(long capacity) {
-        ReleaseMap(_logFileBasePath, _currentFileIndex - 1);
-
-        _logFilePathes.Enqueue(_currentFileIndex);
-        if (_logFilePathes.Count > _maxNumberOfFiles) {
-            int toDeleteIdx = _logFilePathes.Dequeue();
-            string fileToDel = GetLogFilePath(_logFileBasePath, toDeleteIdx);
-            if (File.Exists(fileToDel)) {
-                File.Delete(fileToDel);
-            }
-        }
-
-        string filePath = GetLogFilePath(_logFileBasePath, _currentFileIndex);
-        if (!File.Exists(filePath)) {
-            // should be always the case after first time, but you never know
-            File.Create(filePath!).Dispose();
+    private unsafe void WriteFile(char* data, int length) {
+        length = 2 * length;
+        if (_osIsUnix) {
+            WriteFileUnix((byte*) data, length, 1, _fileHandle);
         } else {
-            _headOffset = new FileInfo(filePath).Length;
-            if (_headOffset >= capacity) {
-                // full file go directly to next file
-                _headOffset = 0L;
-                _currentFileIndex += 1;
-                filePath = GetLogFilePath(_logFileBasePath, _currentFileIndex);
-                File.Create(filePath!).Dispose();
+            WriteFileWindows((byte*) data, length, 1, _fileHandle);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe long GetCursorPosition() {
+        IntPtr cursorPosition;
+        if (_osIsUnix) {
+            CursorPositionUnix(_fileHandle, out cursorPosition);
+        } else {
+            CursorPositionWindows(_fileHandle, out cursorPosition);
+        }
+        return (long)cursorPosition;
+    }
+
+    /// <summary> Close the file.</summary>
+    public void Dispose() {
+        if (_writtenBufferChars > 0) {
+            unsafe {
+                fixed (char* bufPtr = _buffer) {
+                    WriteFile(bufPtr, _writtenBufferChars);
+                }
             }
+            _writtenBufferChars = 0;
         }
 
-        _mappedFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, capacity
-                                                    , MemoryMappedFileAccess.ReadWrite);
-
-        _mapView = _mappedFile.CreateViewAccessor(0, capacity);
-        _mapView.SafeMemoryMappedViewHandle.AcquirePointer(ref _handlePtr);
+        CloseFile();
     }
 
-    private unsafe void ReleaseMap(string filePath, int indexFile) {
-        if (_mapView != null && _handlePtr != null) {
-            _mapView.SafeMemoryMappedViewHandle.ReleasePointer();
-            _mapView = null;
-            _handlePtr = null;
-        }
-
-        if (_mappedFile != null) {
-            _mappedFile.Dispose();
-            _mappedFile = null;
-
-            // truncate log file to the actually written size
-            // maybe do it once for all log files in the destructor ?
-            FileStream file = File.OpenWrite(GetLogFilePath(filePath, indexFile));
-            file.SetLength(_headOffset);
-            file.Dispose();
-        }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ComputeRecordSizeUnix(int dynamicLength) {
+        return 39 + dynamicLength;
     }
 
-    /// <summary>Release the logger resources, if not already done.</summary>
-    ~Logger() {
-        ReleaseMap(_logFileBasePath, _currentFileIndex);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ComputeRecordSizeWindows(int dynamicLength) {
+        return ComputeRecordSizeUnix(dynamicLength) + 1;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string GetLogFilePath(string filePath, int index) {
+        return filePath + index + _extension;
+    }
+
+    #region unix interop
+    // windows: https://pinvoke.net, CallingConvention = CallingConvention.FastCall
+    [DllImport("libc", SetLastError = false, EntryPoint = "fopen")]
+    internal extern static unsafe int* OpenFileUnix(string filename, string mode); // use _wfopen_s on windows
+
+    [DllImport("libc", SetLastError = false, EntryPoint = "fclose")]
+    internal extern static unsafe int CloseFileUnix(int* handle); // use _wfopen_s on windows
+
+    [DllImport("libc", SetLastError = false, EntryPoint = "setbuf")]
+    internal extern static unsafe void SetFileBufferUnix(int* handle, byte* buffer);
+
+    [DllImport("libc", SetLastError = false, EntryPoint = "fwrite")]
+    internal extern static unsafe long WriteFileUnix(byte* ptr, long size, long count, int* handle);
+
+    [DllImport("libc", SetLastError = false, EntryPoint = "fgetpos")]
+    internal extern static unsafe int CursorPositionUnix(int* stream, out IntPtr pos);
+
+    //[DllImport("libc", EntryPoint = "setlocale")]
+    //internal extern static byte* SetLocaleUnix(int category, string locale);
+    #endregion
+
+    #region windows interop
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
+               CharSet = CharSet.Ansi, SetLastError = false, EntryPoint = "fopen")]
+    public extern static unsafe int* OpenFileWindows(string filename, string mode);
+
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false, EntryPoint = "fclose")]
+    public extern static unsafe int CloseFileWindows(int* stream);
+
+
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
+               SetLastError = false, EntryPoint = "setbuf")]
+    internal extern static unsafe void SetFileBufferWindows(int* handle, byte* buffer);
+
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false
+             , EntryPoint = "fwrite")]
+    internal extern static unsafe long WriteFileWindows(byte* ptr, long size, long count, int* handle);
+
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false
+             , EntryPoint = "fwrite")]
+    internal extern static unsafe int CursorPositionWindows(int* stream, out IntPtr pos);
+    #endregion
 }
