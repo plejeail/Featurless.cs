@@ -28,9 +28,10 @@
 // - run the benchmark function 31 times before anything else (enable tier2 JIT)
 //      - it may be interesting to check for the time of running 31 times. if greater than
 //        autoBenchDuration => warn the user about possible long time exec ? probably not
+// - shuffle
 // - run the b batches of p iterations
 //    - for each batch store its average response time
-// - store computation times
+// - compute stats
 /*
 BENCH NAME▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 name   | batches,iterations | Executions/s | Average |   Min   |   Q25%  |   Q50%  |   Q75%  |   Max   | St. Dev.
@@ -58,14 +59,18 @@ public readonly struct BenchmarkOptions
     public readonly int MeasuresCount;
     /// <summary> The number of times to call the benchmarked method per measure. </summary>
     public readonly int ItersCountPerMeasure;
+    /// <summary> Run all measures in a task at the same time. </summary>
+    public readonly bool MultiThread;
 
     /// <summary> Initialize a new instance of <see cref="Featurless.BenchmarkOptions"/>. </summary>
     /// <param name="measuresCount"> The number of measures to be computed by the <see cref="Featurless.Benchmarker"/>. </param>
     /// <param name="itersCountPerMeasure"> The number of times to call the benchmarked method per measure. </param>
-    public BenchmarkOptions(int measuresCount, int itersCountPerMeasure)
+    /// <param name="multiThread"> If true, run all measures in a task at the same time. </param>
+    public BenchmarkOptions(int measuresCount, int itersCountPerMeasure, bool multiThread = false)
     {
         MeasuresCount = measuresCount;
         ItersCountPerMeasure = itersCountPerMeasure;
+        MultiThread = multiThread;
     }
 }
 
@@ -79,11 +84,12 @@ public class Benchmarker
         private static int _nextOrderValue/* = 0*/;
 
         internal readonly string Group;
-        private readonly string _name;
-        private readonly Action _function;
-        private readonly int _measuresCount;
-        private readonly int _itersPerMeasure;
-        private readonly int _order;
+        private readonly  bool   _isMultiThread;
+        private readonly  string _name;
+        private readonly  Action _function;
+        private readonly  int    _measuresCount;
+        private readonly  int    _itersPerMeasure;
+        private readonly  int    _order;
 
         /// <summary> Create a BenchmarkPlannning instance. </summary>
         /// <param name="group"> The group of the benchmark. </param>
@@ -96,6 +102,7 @@ public class Benchmarker
             _function = function;
             _measuresCount = opts.MeasuresCount;
             _itersPerMeasure = opts.ItersCountPerMeasure;
+            _isMultiThread = opts.MultiThread;
             _order = _nextOrderValue++;
         }
 
@@ -109,20 +116,38 @@ public class Benchmarker
 
         /// <summary> Run the benchmark. </summary>
         /// <returns> The benchmark execution statistics. </returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal Statistics Run() {
             long[] ticks = new long[_measuresCount];
-            Stopwatch timer = new();
-            for (int i = 0; i < _measuresCount; ++i) {
-                timer.Restart();
-                for (int j = 0; j < _itersPerMeasure; ++j) {
-                    _function();
-                }
+            int processorCount;
+            int iters = _itersPerMeasure;
+            Action f  = _function;
+            if (_isMultiThread) {
+                processorCount = Math.Max(Environment.ProcessorCount - 1, 1);
+                ParallelOptions options        = new() { MaxDegreeOfParallelism = processorCount };
+                Parallel.For(0, _measuresCount, options, (i) => {
+                    Stopwatch timer = Stopwatch.StartNew();
+                    for (int j = 0; j < iters; ++j) {
+                        f();
+                    }
 
-                timer.Stop();
-                ticks[i] = timer.ElapsedTicks / _itersPerMeasure;
+                    ticks[i] = timer.ElapsedTicks / iters;
+                });
+            } else {
+                processorCount = 1;
+                Stopwatch timer = new();
+                for (int i = 0; i < _measuresCount; ++i) {
+                    timer.Restart();
+                    for (int j = 0; j < _itersPerMeasure; ++j) {
+                        _function();
+                    }
+
+                    timer.Stop();
+                    ticks[i] = timer.ElapsedTicks / _itersPerMeasure;
+                }
             }
 
-            return new Statistics(_name, _order, _itersPerMeasure, ticks);
+            return new Statistics(_name, _order, _itersPerMeasure, processorCount, ticks);
         }
     }
 
@@ -133,8 +158,9 @@ public class Benchmarker
         internal readonly string Name;
         /// <summary> Ordering value of the Statistics instance. Used to retrieve registering order. </summary>
         internal readonly int Order;
-        private readonly int _measuresCount;
-        private readonly int _itersPerMeasure;
+        private readonly int  _measuresCount;
+        private readonly int  _processorCount;
+        private readonly int  _itersPerMeasure;
         private readonly long _average;
         private readonly long _stdev;
         private readonly long _q10;
@@ -146,14 +172,15 @@ public class Benchmarker
         /// <summary> Create statistics instance. </summary>
         /// <param name="name"> The name of the associated benchmark. </param>
         /// <param name="itersPerMeasure"> The number of iterations done per measure. </param>
+        /// <param name="processorCount"> The number of cores used. </param>
         /// <param name="measures"> An array of measured ticks (from stopwatch precision). </param>
         /// <param name="order"> The 'order rank' in the final table.</param>
-        internal Statistics(string name, int order, int itersPerMeasure, long[] measures) {
+        internal Statistics(string name, int order, int itersPerMeasure, int processorCount, long[] measures) {
             Name = name;
             Order = order;
             _itersPerMeasure = itersPerMeasure;
             _measuresCount = measures.Length - 1;
-
+            _processorCount = processorCount;
             Array.Sort(measures);
 
 
@@ -182,7 +209,7 @@ public class Benchmarker
         /// <summary> Re-compute total benchmarking time. </summary>
         /// <returns> Formatted string of the benchmark running time. </returns>
         internal string GetTotalRunningTime() {
-            return FormatTicks(_average * _itersPerMeasure * _measuresCount);
+            return FormatTicks(_average * _itersPerMeasure * _measuresCount / _processorCount);
         }
 
         /// <summary> Add the benchmark formated statistics line to given string builder. </summary>
@@ -217,12 +244,13 @@ public class Benchmarker
         /// <returns> The estimated maximum number of possible executions per seconds. </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private double ExecsPerSecond() {
-            return (double) Stopwatch.Frequency / _average;
+            return _processorCount * ((double) Stopwatch.Frequency / _average);
         }
 
         /// <summary> Convert a number of stopwatch ticks to the appropriate time unit. </summary>
         /// <param name="ticks"> The number of ticks to convert. </param>
         /// <returns> A formated string represented the number of ticks. </returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static string FormatTicks(long ticks) {
             long nanos  = (long) (1_000_000_000D / Stopwatch.Frequency) * ticks;
 
@@ -269,7 +297,10 @@ public class Benchmarker
         Thread.Sleep(200);
 
         BenchmarkPlannning emptyPlan = new(null, null, () => {}, new BenchmarkOptions(30, 30));
-        JitOptimize(() => { emptyPlan.Run(); });
+        JitOptimize(() => emptyPlan.Run());
+
+        int coresCount = Math.Max(Environment.ProcessorCount - 1, 1);
+        Console.WriteLine($"[BENCHMARK] {coresCount} used core on multi thread.");
     }
 
     /// <summary> Register a <see cref="System.Action"/> benchmark. The benchmark plan is automatically done. </summary>
@@ -287,12 +318,12 @@ public class Benchmarker
 
         int batchesCount = Math.Min((int) (_maxDurationAutoBench / batchDuration), _maxMeasuresCount);
         if (batchesCount < 30) {
-            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({batchesCount} < 30)");
+            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({batchesCount} < 30).");
             return;
         }
 
         TimeSpan estimatedTime =  ToTimeSpan(batchesCount * batchDuration);
-        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {estimatedTime.TotalSeconds:G4}s)");
+        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {estimatedTime.TotalSeconds:G4}s).");
         _plans.Add(new BenchmarkPlannning(group, name, fun, new BenchmarkOptions(batchesCount, itersCountPerBatch)));
     }
 
@@ -307,24 +338,24 @@ public class Benchmarker
         }
 
         if (opts.MeasuresCount < 30) {
-            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({opts.MeasuresCount} < 30)");
+            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({opts.MeasuresCount} < 30).");
             return;
         }
 
         if (opts.ItersCountPerMeasure < 1) {
-            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough iters/batch ({opts.ItersCountPerMeasure} < 1)");
+            Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough iters/batch ({opts.ItersCountPerMeasure} < 1).");
             return;
         }
 
         JitOptimize(fun);
 
-        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({opts.MeasuresCount}x{opts.ItersCountPerMeasure})");
+        Console.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({opts.MeasuresCount}x{opts.ItersCountPerMeasure}).");
         _plans.Add(new BenchmarkPlannning(group, name, fun, opts));
     }
 
     /// <summary> Run all the previously registered benchmarks. </summary>
     public void Run() {
-        Console.WriteLine("[BENCHMARK::SHUFFLE] Shuffling benchmarks");
+        Console.WriteLine("[BENCHMARK::SHUFFLE] Shuffling benchmarks.");
         FisherYatesShuffle(_plans);
 
         // perform benchmarks
@@ -334,7 +365,7 @@ public class Benchmarker
             Console.Write("[BENCHMARK::RUN] " + plan + "...");
             Statistics currentStats = plan.Run();
             _stats[plan.Group].Add(currentStats);
-            Console.WriteLine("done in " + currentStats.GetTotalRunningTime());
+            Console.WriteLine("done in " + currentStats.GetTotalRunningTime() + '.');
         }
 
         // reorder results per group in registering order

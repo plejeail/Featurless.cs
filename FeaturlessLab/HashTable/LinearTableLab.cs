@@ -91,7 +91,7 @@ class LinearTableBuildStruct
     public void Build25() {
         _lt.Clear();
 
-        for (int i = 0; i < (_maxCapacity / 4); ++i) {
+        for (int i = 0; i < _maxCapacity / 4; ++i) {
             _lt.Add(i, new BigType());
         }
     }

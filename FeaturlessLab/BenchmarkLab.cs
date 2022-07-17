@@ -17,7 +17,7 @@ public static class BenchmarkLab
         fixed (int* arrPtrFixed = arr) {
             int* arrPtr = arrPtrFixed;
             for (int i = 1; i < arr.Length; ++i) {
-                *(++arrPtr) += *arrPtr;
+                *++arrPtr += *arrPtr;
             }
         }
     }
@@ -32,7 +32,7 @@ public static class BenchmarkLab
         fixed (int* arrPtrFixed = arr) {
             int* arrPtr = arrPtrFixed;
             for (int i = 2; i < arr.Length; ++i) {
-                *(++arrPtr) *= *arrPtr;
+                *++arrPtr *= *arrPtr;
             }
         }
     }

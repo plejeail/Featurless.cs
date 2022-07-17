@@ -16,7 +16,7 @@ public static class Program
         if (HasFlag(args, "minitest")) {
             MiniTestLab.Run(Array.Empty<string>());
         }
-        /* LOGGER *
+        /* LOGGER */
         if (HasFlag(args, "logger")) {
             LoggerLab.Run();
         }
@@ -24,7 +24,7 @@ public static class Program
         if (HasFlag(args, "hashtable")) {
             LinearTableLab.Run(Array.Empty<string>(), tests);
         }
-        /* BENCHMARK */
+        /* BENCHMARK *
         if (HasFlag(args, "benchmark")) {
             BenchmarkLab.Run();
         }
