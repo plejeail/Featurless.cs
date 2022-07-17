@@ -37,7 +37,7 @@ internal static unsafe class Tools
         int threadId = Thread.CurrentThread.ManagedThreadId;
         do {
             int nextVal = threadId / 16;
-            *destination-- = (char)_hexDigits[threadId - (nextVal * 16)];
+            *destination-- = (char)_hexDigits[threadId - nextVal * 16];
             threadId = nextVal;
         } while (threadId > 0);
     }

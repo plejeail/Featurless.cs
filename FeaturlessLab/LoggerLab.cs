@@ -1,76 +1,36 @@
 namespace FeaturlessLab;
 
-using System.Diagnostics;
 using Featurless;
 
-public class LoggerLab
+public static class LoggerLab
 {
+    private const  int       _fileSize   = 10_000;
+    private const  int       _maxFiles   = 10;
+    private const  string    _message    = "OK my message is this: 'GET UP Man!'OK my message is this: 'GET UP Man!'";
+    private static readonly MapLogger _mapLogger  = new("./", "logger-map", _fileSize, _maxFiles);
+    private static readonly Logger _streamLogger = new("./", "logger-stream", _fileSize, _maxFiles);
+
+    private static void LogMmap() {
+        _mapLogger.Info(_message);
+    }
+
+    private static void LogStream() {
+        _streamLogger.Info(_message);
+    }
+
     public static void Run(bool multiThread = true) {
-        RunSingleThread(2000, 1000, 3);
-        if (multiThread) {
-            Console.WriteLine("####################");
-            RunMultiThread(20, 100, 1000, 3);
-        }
-    }
+        /* */
+        _mapLogger.MinLevel = MapLogger.Level.Debug;
+        Benchmarker bench = new();
+        bench.Register("Logger", "MMAP ST", LogMmap, new BenchmarkOptions(5000, 200));
+        bench.Register("Logger", "MMAP MT", LogMmap, new BenchmarkOptions(5000, 200, true));
+        bench.Register("Logger", "STREAM ST", LogStream, new BenchmarkOptions(5000, 200));
+        bench.Register("Logger", "STREAM MT", LogStream, new BenchmarkOptions(5000, 200, true));
+        bench.Run();
 
-    private static void RunSingleThread(int count, int fileSize, int maxFiles) {
-        Console.WriteLine("### Single thread ###");
-        using Logger l = new("./", "logger-test-st", fileSize, maxFiles);
-        const string msg = "OK my message is this: 'GET UP Man!'OK my message is this: 'GET UP Man!'";
-        Stopwatch sw = Stopwatch.StartNew();
-        for (int i = 0; i < count; ++i) {
-            l.Error(msg);
-        }
-
-        if (sw.ElapsedMilliseconds > 0) {
-            Console.WriteLine($"Time: {sw.ElapsedMilliseconds}ms");
-            Console.WriteLine($"logs/s: {1000 * count / sw.ElapsedMilliseconds}");
-            Console.WriteLine($"ns/log: {sw.ElapsedMilliseconds * 1000000 / count}");
-            Console.WriteLine($"MB/s:  {count * sizeof(char) * msg.Length / (1000.0d * sw.ElapsedMilliseconds):F2}");
-        } else {
-            Console.WriteLine("Faster than measure");
-        }
-    }
-
-    private static void RunMultiThread(int nbTasks, int nLogsPerTask, int fileSize, int maxFiles) {
-        if (nbTasks <= 0 || nLogsPerTask <= 0) {
-            return;
-        }
-
-        Console.WriteLine("### Multi thread ###");
-        Logger l = new("./", "logger-test-mt", fileSize, maxFiles);
-        l.MinLevel = Logger.Level.Debug;
-        const string str = "Allo Allo ? cest ici que ca se passe, pas par la bas man!";
-        Task[] logs = new Task[nbTasks];
-        int done = 0;
-        for (int i = 0; i < logs.Length; ++i) {
-            logs[i] = new Task(() => {
-                for (int k = 0; k < nLogsPerTask; ++k) {
-                    // ReSharper disable once AccessToDisposedClosure
-                    l.Debug(str);
-                }
-
-                Interlocked.Increment(ref done);
-            });
-        }
-
-        Stopwatch sw = Stopwatch.StartNew();
-        for (int i = 0; i < logs.Length; ++i) {
-            logs[i].Start();
-        }
-
-        while (done != nbTasks) {
-            Thread.Sleep(1);
-        }
-
-        l.Dispose();
-        if (sw.ElapsedMilliseconds > 0) {
-            Console.WriteLine($"Time: {sw.ElapsedMilliseconds}ms");
-            Console.WriteLine($"logs/s: {1000 * nbTasks * nLogsPerTask / sw.ElapsedMilliseconds}");
-            Console.WriteLine($"ns/log: {sw.ElapsedMilliseconds * 1000000 / (nbTasks * nLogsPerTask)}");
-            Console.WriteLine($"MB/s:  {nbTasks * nLogsPerTask * sizeof(char) * str.Length / (1000.0d * sw.ElapsedMilliseconds):F2}");
-        } else {
-            Console.WriteLine("Faster than measure");
-        }
+        Console.WriteLine(bench);
+        /* */
+        _streamLogger.Dispose();
+        _mapLogger.Dispose();
     }
 }

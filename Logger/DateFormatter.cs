@@ -95,7 +95,7 @@ internal struct DateFormatter
         Tools.WriteSmallIntegerString(dest + 2, num2 * 400 + num4 * 100 + num6 * 4 + num8 - 30);
         dest[4] = '-';
         ushort num9 = (ushort)(num7 - num8 * 365U);
-        ushort[] numArray = num8 != 3U || (num6 == 24U && num4 != 3U) ? _daysToMonth365 : _daysToMonth366;
+        ushort[] numArray = num8 != 3U || num6 == 24U && num4 != 3U ? _daysToMonth365 : _daysToMonth366;
         uint index = ((uint)num9 >> 5) + 1U;
         while (num9 >= numArray[index]) {
             ++index;
