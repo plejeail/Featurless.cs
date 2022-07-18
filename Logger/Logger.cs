@@ -3,6 +3,7 @@ namespace Featurless;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 
+/// <summary>Simple logger class</summary>
 public sealed class Logger : IDisposable
 {
     /// <summary>The following levels are defined in order of increasing priority: Debug, Info, Warn, Error, Off.</summary>
@@ -30,25 +31,29 @@ public sealed class Logger : IDisposable
     private readonly bool       _osIsUnix;
     private readonly long       _maxFileSize;
     private readonly int        _maxNumberOfFiles;
-    private readonly object     _lockBuffer;
     private readonly object     _lockFile;
     private unsafe   int*       _fileHandle;
     private readonly string     _logFileBasePath;
     private readonly Queue<int> _logFilePathes;
+    private readonly char[]     _buffer;
 
     private DateFormatter _dateHandler;
 
     private int    _writtenBufferChars;
     private long   _currentFileSize;
-    private char[] _buffer;
     private int    _currentFileIndex;
     private int    _concurrentWrites;
 
     /// <summary>Log with a lower priority level are not written. Log everything by default.</summary>
     public Level MinLevel = Level.Debug;
 
+    /// <summary>Create a logger instance.</summary>
+    /// <param name="logFolderPath">folder in which log files are written.</param>
+    /// <param name="logNameWithoutExt">name of the log files without extension.</param>
+    /// <param name="maxSizeInKB">maximum size of a log file.</param>
+    /// <param name="maxNumberOfFiles">maximum number of log files.</param>
     // ReSharper disable once InconsistentNaming fileSizeInKB
-    public Logger(string logFolderPath, string logNameWithoutExt, int fileSizeInKB, int maxNumberOfFiles) {
+    public Logger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB, int maxNumberOfFiles) {
         unsafe { _fileHandle = null; }
         _osIsUnix = Environment.OSVersion.Platform == PlatformID.Unix
                  || Environment.OSVersion.Platform == PlatformID.MacOSX;
@@ -56,9 +61,8 @@ public sealed class Logger : IDisposable
         _concurrentWrites = _writtenBufferChars = 0;
         _currentFileSize = 0L;
         _maxNumberOfFiles = maxNumberOfFiles;
-        _maxFileSize = fileSizeInKB * 1000L / sizeof(char);
+        _maxFileSize = maxSizeInKB * 1000L / sizeof(char);
         _buffer = new char[_bufferLength];
-        _lockBuffer = new object();
         _lockFile = new object();
 
         _logFileBasePath = Path.Combine(logFolderPath, logNameWithoutExt + '.');
@@ -222,30 +226,19 @@ public sealed class Logger : IDisposable
     private unsafe int GetBufferOffset(int length) {
         int offset = Interlocked.Add(ref _writtenBufferChars, length) - length;
         while (offset + length > _bufferLength) {
-            char[] localBufferRef = null;
-            int    charsToWrite   = 0;
-            lock (_lockBuffer) {
-                // update buffer
+            lock (_lockFile) {
                 if (_writtenBufferChars + length > _bufferLength) {
-                    localBufferRef = _buffer;
                     WaitForWritesEnd();
-                    _buffer = new char[_bufferLength];
-                    charsToWrite = offset;
-                    _writtenBufferChars = 0;
-                }
-            }
-
-            if (localBufferRef != null) {
-                lock (_lockFile) {
                     // rotate
                     if (_currentFileSize + _writtenBufferChars > _maxFileSize) {
                         RollFile();
                     }
                     // write file
-                    fixed (char* bufPtr = localBufferRef) {
-                        WriteFile(bufPtr, charsToWrite);
+                    fixed (char* bufPtr = _buffer) {
+                        WriteFile(bufPtr, _writtenBufferChars);
                     }
-                    _currentFileSize += charsToWrite;
+                    _currentFileSize += _writtenBufferChars;
+                    _writtenBufferChars = 0;
                 }
             }
 
@@ -414,10 +407,10 @@ public sealed class Logger : IDisposable
     #region windows interop
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
                CharSet = CharSet.Ansi, SetLastError = false, EntryPoint = "fopen")]
-    public extern static unsafe int* OpenFileWindows(string filename, string mode);
+    internal extern static unsafe int* OpenFileWindows(string filename, string mode);
 
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false, EntryPoint = "fclose")]
-    public extern static unsafe int CloseFileWindows(int* stream);
+    internal extern static unsafe int CloseFileWindows(int* stream);
 
 
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
