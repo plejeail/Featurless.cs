@@ -300,7 +300,7 @@ public class Benchmarker
         JitOptimize(() => emptyPlan.Run());
 
         int coresCount = Math.Max(Environment.ProcessorCount - 1, 1);
-        Console.WriteLine($"[BENCHMARK] {coresCount} used core on multi thread.");
+        Console.WriteLine($"[BENCHMARK] {coresCount} cores used for multi thread executions.");
     }
 
     /// <summary> Register a <see cref="System.Action"/> benchmark. The benchmark plan is automatically done. </summary>
