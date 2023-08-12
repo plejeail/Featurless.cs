@@ -41,7 +41,7 @@ name   | batches,iterations | Executions/s | Average |   Min   |   Q25%  |   Q50
 {name} |    0000,0000       | 1000000000/s | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un | 0.000un
 ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
 */
-namespace Featurless;
+namespace Featurless.Benchmark;
 
 using System;
 using System.Collections.Generic;
@@ -52,18 +52,18 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-/// <summary> Provide options to be used when registering a benchmark in <see cref="Featurless.Benchmarker"/>. </summary>
+/// <summary> Provide options to be used when registering a benchmark in <see cref="Featurless.Benchmark.Benchmarker"/>. </summary>
 public readonly struct BenchmarkOptions
 {
-    /// <summary> The number of measures to be computed by the <see cref="Featurless.Benchmarker"/>. </summary>
+    /// <summary> The number of measures to be computed by the <see cref="Featurless.Benchmark.Benchmarker"/>. </summary>
     public readonly int MeasuresCount;
     /// <summary> The number of times to call the benchmarked method per measure. </summary>
     public readonly int ItersCountPerMeasure;
     /// <summary> Run all measures in a task at the same time. </summary>
     public readonly bool MultiThread;
 
-    /// <summary> Initialize a new instance of <see cref="Featurless.BenchmarkOptions"/>. </summary>
-    /// <param name="measuresCount"> The number of measures to be computed by the <see cref="Featurless.Benchmarker"/>. </param>
+    /// <summary> Initialize a new instance of <see cref="Featurless.Benchmark.BenchmarkOptions"/>. </summary>
+    /// <param name="measuresCount"> The number of measures to be computed by the <see cref="Featurless.Benchmark.Benchmarker"/>. </param>
     /// <param name="itersCountPerMeasure"> The number of times to call the benchmarked method per measure. </param>
     /// <param name="multiThread"> If true, run all measures in a task at the same time. </param>
     public BenchmarkOptions(int measuresCount, int itersCountPerMeasure, bool multiThread = false)
@@ -106,7 +106,7 @@ public class Benchmarker
             _order = _nextOrderValue++;
         }
 
-        /// <summary> Converts this <see cref="Featurless.Benchmarker.BenchmarkPlannning"/> instance to its equivalent
+        /// <summary> Converts this <see cref="Featurless.Benchmark.Benchmarker.BenchmarkPlannning"/> instance to its equivalent
         /// string representation.
         /// </summary>
         /// <returns> The string representation of this instance. </returns>
@@ -125,7 +125,7 @@ public class Benchmarker
             if (_isMultiThread) {
                 processorCount = Math.Max(Environment.ProcessorCount - 1, 1);
                 ParallelOptions options        = new() { MaxDegreeOfParallelism = processorCount };
-                Parallel.For(0, _measuresCount, options, (i) => {
+                Parallel.For(0, _measuresCount, options, i => {
                     Stopwatch timer = Stopwatch.StartNew();
                     for (int j = 0; j < iters; ++j) {
                         f();
@@ -256,16 +256,18 @@ public class Benchmarker
 
             if (nanos < 1000L) {
                 return nanos.ToString(CultureInfo.InvariantCulture).PadLeft(5) + "ns";
-            } else if (nanos < 1_000_000L) {
-                double nsd = (double) nanos / 1000L;
-                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "μs";
-            } else if (nanos < 1_000_000_000L) {
-                double nsd = (double) nanos / 1_000_000L;
-                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "ms";
-            } else {
-                double nsd = (double) nanos / 1_000_000_000L;
-                return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + 's';
             }
+            if (nanos < 1_000_000L) {
+                double nsd1 = (double) nanos / 1000L;
+                return nsd1.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "μs";
+            }
+            if (nanos < 1_000_000_000L) {
+                double nsd2 = (double) nanos / 1_000_000L;
+                return nsd2.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + "ms";
+            }
+
+            double nsd = (double) nanos / 1_000_000_000L;
+            return nsd.ToString("G4", CultureInfo.InvariantCulture).PadLeft(5) + 's';
         }
     }
 
@@ -283,10 +285,10 @@ public class Benchmarker
         get { return ToTimeSpan(_maxDurationAutoBench); }
     }
 
-    /// <summary> Initialize a new instance of <see cref="Featurless.Benchmarker"/>. </summary>
+    /// <summary> Initialize a new instance of <see cref="Featurless.Benchmark.Benchmarker"/>. </summary>
     public Benchmarker() : this(TimeSpan.FromSeconds(60)) {}
 
-    /// <summary> Initialize a new instance of <see cref="Featurless.Benchmarker"/>. </summary>
+    /// <summary> Initialize a new instance of <see cref="Featurless.Benchmark.Benchmarker"/>. </summary>
     /// <param name="autoBenchMaxDuration">The aimed duration of autoconfigured benchmarks.</param>
     public Benchmarker(TimeSpan autoBenchMaxDuration) {
         _plans = new List<BenchmarkPlannning>();
@@ -296,7 +298,7 @@ public class Benchmarker
         // tiered compilation trigger only if the JIT did not compiled anything for at least 100ms.
         Thread.Sleep(200);
 
-        BenchmarkPlannning emptyPlan = new(null, null, () => {}, new BenchmarkOptions(30, 30));
+        BenchmarkPlannning emptyPlan = new(null, null, static () => {}, new BenchmarkOptions(30, 30));
         JitOptimize(() => emptyPlan.Run());
 
         int coresCount = Math.Max(Environment.ProcessorCount - 1, 1);
@@ -331,7 +333,7 @@ public class Benchmarker
     /// <param name="group"> The table in which will be displayed the benchmark. </param>
     /// <param name="name"> The displayed name of the benchmark. </param>
     /// <param name="fun"> The delegate to be benchmarked. </param>
-    /// <param name="opts"> A <see cref="Featurless.BenchmarkOptions"/> instance. </param>
+    /// <param name="opts"> A <see cref="Featurless.Benchmark.BenchmarkOptions"/> instance. </param>
     public void Register(string group, string name, Action fun, BenchmarkOptions opts) {
         if (!_stats.ContainsKey(group)) {
             _stats.Add(group, new List<Statistics>());
@@ -370,12 +372,12 @@ public class Benchmarker
 
         // reorder results per group in registering order
         foreach (List<Statistics> list in _stats.Values) {
-            list.Sort((el1, el2) => el1.Order - el2.Order);
+            list.Sort(static (el1, el2) => el1.Order - el2.Order);
         }
     }
 
     /// <summary>
-    /// Convert this instance of <see cref="Featurless.Benchmarker"/> to a string summary of
+    /// Convert this instance of <see cref="Featurless.Benchmark.Benchmarker"/> to a string summary of
     /// the already performed benchmarks.
     /// </summary>
     /// <returns> The string summary. </returns>
