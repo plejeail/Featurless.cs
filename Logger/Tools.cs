@@ -1,33 +1,34 @@
-namespace Featurless;
+namespace Featurless.Logger;
 
 using System.Runtime.CompilerServices;
 
 internal static unsafe class Tools
 {
-    private static readonly byte[] _hexDigits = {
-             (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5'
-           , (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'a', (byte)'b'
-           , (byte)'c', (byte)'d', (byte)'e', (byte)'f',
-    };
+    private static readonly byte[] _hexDigits = "0123456789abcdef"u8.ToArray();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int CountDigits(int value) {
         if (value < 10) {
             return 1;
-        } else if (value < 100) {
-            return 2;
-        } else if (value < 1000) {
-            return 3;
-        } else if (value < 10000) {
-            return 4;
-        } else {
-#if Debug
-            if (value < 100000) {
-                new Exception("I did not assumed that your source file had >100000 lines, sorry.");
-            }
-#endif
-            return 5;
         }
+
+        if (value < 100) {
+            return 2;
+        }
+
+        if (value < 1000) {
+            return 3;
+        }
+
+        if (value < 10000) {
+            return 4;
+        }
+#if Debug
+        if (value < 100000) {
+            new Exception("I did not assumed that your source file had >100000 lines, sorry.");
+        }
+#endif
+        return 5;
     }
 
     internal static void WriteThreadId(char* destination) {

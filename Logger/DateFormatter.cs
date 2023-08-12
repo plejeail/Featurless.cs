@@ -1,4 +1,4 @@
-namespace Featurless;
+namespace Featurless.Logger;
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -127,7 +127,7 @@ internal struct DateFormatter
     /// <returns>current date as ticks</returns>
     [SuppressGCTransition]
     [DllImport("libSystem.Native", EntryPoint = "SystemNative_GetSystemTimeAsTicks")]
-    private extern static long UnixGetSystemTimeAsTicks();
+    private static extern long UnixGetSystemTimeAsTicks();
 
     [StructLayout(LayoutKind.Explicit)]
     private struct WindowsFileTime
@@ -142,12 +142,12 @@ internal struct DateFormatter
     }
 
     [DllImport("kernel32")]
-    private extern static void GetSystemTimeAsFileTime(ref WindowsFileTime lpSystemTimeAsFileTime);
+    private static extern void GetSystemTimeAsFileTime(ref WindowsFileTime lpSystemTimeAsFileTime);
 
     // Untested
     private static ulong WindowsGetSystemTimeAsTicks() {
         WindowsFileTime fileTime = new();
         GetSystemTimeAsFileTime(ref fileTime);
-        return (ulong) fileTime.ticks;
+        return fileTime.ticks;
     }
 }

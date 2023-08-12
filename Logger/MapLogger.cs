@@ -27,7 +27,7 @@
 // #define FEATURLESS_LOG_LEVEL_DISABLED_ERROR
 
 
-namespace Featurless;
+namespace Featurless.Logger;
 
 using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
@@ -87,7 +87,7 @@ public sealed class MapLogger : IDisposable
     public MapLogger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB, int maxNumberOfFiles) {
         _dateHandler = new DateFormatter();
         _headOffset = 0L;
-        _mapBytesLength = 1000L * (long) maxSizeInKB;
+        _mapBytesLength = 1000L * maxSizeInKB;
         _maxNumberOfFiles = maxNumberOfFiles;
 
         _logFileBasePath = Path.Combine(logFolderPath, logNameWithoutExt + '.');
@@ -197,7 +197,7 @@ public sealed class MapLogger : IDisposable
         locationPtr[33] = '(';
         // caller location
         fixed (char* callerFilePathPtr = callerFilePath) {
-            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 34), (void*) callerFilePathPtr
+            Unsafe.CopyBlockUnaligned(locationPtr + 34, callerFilePathPtr
                            , (uint) (sizeof(char) * callerFilePathLength));
         }
 
@@ -212,7 +212,7 @@ public sealed class MapLogger : IDisposable
 
         // write message
         fixed (char* messagePtr = message) {
-            Unsafe.CopyBlockUnaligned((void*) (locationPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
+            Unsafe.CopyBlockUnaligned(locationPtr + 38, messagePtr, (uint) (sizeof(char) * messageLength));
         }
 
         locationPtr += messageLength;
@@ -271,7 +271,7 @@ public sealed class MapLogger : IDisposable
 
             int indexStartDot = filePath.LastIndexOf('.', indexEndDot - 1) + 1;
             System.Diagnostics.Debug.Assert(indexStartDot != 0, "logFiles should contains only log files.");
-            if (Int32.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot), out int index)) {
+            if (int.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot), out int index)) {
                 indices.Add(index);
             }
         }

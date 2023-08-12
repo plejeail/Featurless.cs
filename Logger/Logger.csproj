@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -12,7 +12,7 @@
         <RepositoryUrl>https://github.com/plejeail/Featurless.cs</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>logger, file rolling</PackageTags>
-        <RootNamespace>FeaturlessLogger</RootNamespace>
+        <RootNamespace>Featurless.Logger</RootNamespace>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

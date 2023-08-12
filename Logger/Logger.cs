@@ -1,7 +1,8 @@
-namespace Featurless;
+namespace Featurless.Logger;
 
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+
 
 /// <summary>Simple logger class</summary>
 public sealed class Logger : IDisposable
@@ -21,31 +22,47 @@ public sealed class Logger : IDisposable
         Off,
     }
 
-    private const int    _bufferLength     = 65536 / sizeof(char);
-    private const long   _levelStringDebug = 0x0047_0042_0044_0020L; // DBG
-    private const long   _levelStringInfo  = 0x0046_004E_0049_0020L; // INF
-    private const long   _levelStringWarn  = 0x004E_0052_0057_0020L; // WRN
-    private const long   _levelStringError = 0x0052_0052_0045_0020L; // ERR
-    private const string _extension        = ".log";
+    private const int _bufferLength      = 65536 / sizeof(char);
+    private const long _levelStringDebug = 0x0047_0042_0044_0020L;  // DBG
+    private const long _levelStringInfo  = 0x0046_004E_0049_0020L;  // INF
+    private const long _levelStringWarn  = 0x004E_0052_0057_0020L;  // WRN
+    private const long _levelStringError = 0x0052_0052_0045_0020L;  // ERR
+    private const string _extension      = ".log";
 
-    private readonly bool       _osIsUnix;
-    private readonly long       _maxFileSize;
-    private readonly int        _maxNumberOfFiles;
-    private readonly object     _lockFile;
-    private unsafe   int*       _fileHandle;
-    private readonly string     _logFileBasePath;
+    private static readonly bool _osIsUnix = Environment.OSVersion.Platform == PlatformID.Unix
+                                             || Environment.OSVersion.Platform == PlatformID.MacOSX;
+    private readonly long _maxFileSize;
+    private readonly int _maxNumberOfFiles;
+    private readonly object _lockFile;
+    private unsafe int* _fileHandle;
+    private readonly string _logFileBasePath;
     private readonly Queue<int> _logFilePathes;
-    private readonly char[]     _buffer;
+    private readonly char[] _buffer;
 
     private DateFormatter _dateHandler;
 
-    private int    _writtenBufferChars;
-    private long   _currentFileSize;
-    private int    _currentFileIndex;
-    private int    _concurrentWrites;
+    private int _writtenBufferChars;
+    private long _currentFileSize;
+    private int _currentFileIndex;
+    private int _concurrentWrites;
 
-    /// <summary>Log with a lower priority level are not written. Log everything by default.</summary>
+    /// <summary>
+    /// Log with a lower priority level are not written.
+    /// In debug build, default is debug, while in release build, default is info.
+    /// </summary>
+#if DEBUG
     public Level MinLevel = Level.Debug;
+#else
+    public Level MinLevel = Level.Information;
+#endif
+
+    private static bool SupportedOs() {
+        return _osIsUnix
+           || Environment.OSVersion.Platform == PlatformID.Win32S
+           || Environment.OSVersion.Platform == PlatformID.Win32Windows
+           || Environment.OSVersion.Platform == PlatformID.Win32NT
+           || Environment.OSVersion.Platform == PlatformID.WinCE;
+    }
 
     /// <summary>Create a logger instance.</summary>
     /// <param name="logFolderPath">folder in which log files are written.</param>
@@ -53,10 +70,16 @@ public sealed class Logger : IDisposable
     /// <param name="maxSizeInKB">maximum size of a log file.</param>
     /// <param name="maxNumberOfFiles">maximum number of log files.</param>
     // ReSharper disable once InconsistentNaming fileSizeInKB
-    public Logger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB, int maxNumberOfFiles) {
-        unsafe { _fileHandle = null; }
-        _osIsUnix = Environment.OSVersion.Platform == PlatformID.Unix
-                 || Environment.OSVersion.Platform == PlatformID.MacOSX;
+    public Logger(string logFolderPath, string logNameWithoutExt, int maxSizeInKB,
+                  int maxNumberOfFiles) {
+        unsafe {
+            _fileHandle = null;
+        }
+        if (!SupportedOs()) {
+            throw new NotSupportedException(
+                "Your operating system is not supported.");
+        }
+
         _dateHandler = new DateFormatter();
         _concurrentWrites = _writtenBufferChars = 0;
         _currentFileSize = 0L;
@@ -66,34 +89,26 @@ public sealed class Logger : IDisposable
         _lockFile = new object();
 
         _logFileBasePath = Path.Combine(logFolderPath, logNameWithoutExt + '.');
-        string[]  files   = Directory.GetFiles(logFolderPath, logNameWithoutExt + ".*.log");
+        string[] files = Directory.GetFiles(logFolderPath, logNameWithoutExt + ".*.log");
         List<int> indices = LookForFileIndices(files);
         _logFilePathes = new Queue<int>(indices);
-        _currentFileIndex = indices.Count > 0 ? indices[^1] : 0;
-
-        if (_osIsUnix) {
-            //_ = SetLocaleUnix(0, "en_US.UTF-8");
-        } else {
-            if (Environment.OSVersion.Platform != PlatformID.Win32S
-                    && Environment.OSVersion.Platform != PlatformID.Win32Windows
-                    && Environment.OSVersion.Platform != PlatformID.Win32NT
-                    && Environment.OSVersion.Platform != PlatformID.WinCE) {
-                throw new NotSupportedException("Your operating system does not seems to be supported.");
-            }
-            //throw new NotImplementedException();
-        }
+        _currentFileIndex = indices.Count > 0
+                          ? indices[^1]
+                          : 0;
 
         OpenFile();
     }
 
-    #pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
+#pragma warning disable CS1573 // parameters sourceFile and lineNumber should not have a documentation
     /// <summary>Write a debug record in the log file.</summary>
     /// <param name="message">the message of the record</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Debug(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+    public void Debug(string message, [CallerFilePath] string sourceFile = "",
+                      [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_DEBUG
         if (MinLevel <= Level.Debug) {
-            WriteRecord(message, _levelStringDebug, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+            WriteRecord(message, _levelStringDebug, Path.GetFileName(sourceFile.AsSpan()),
+                lineNumber);
         }
 #endif
     }
@@ -101,10 +116,12 @@ public sealed class Logger : IDisposable
     /// <summary>Write an information record in the log file.</summary>
     /// <param name="message">the message of the record</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Info(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+    public void Info(string message, [CallerFilePath] string sourceFile = "",
+                     [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_INFO
         if (MinLevel <= Level.Information) {
-            WriteRecord(message, _levelStringInfo, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+            WriteRecord(message, _levelStringInfo, Path.GetFileName(sourceFile.AsSpan()),
+                lineNumber);
         }
 #endif
     }
@@ -112,10 +129,12 @@ public sealed class Logger : IDisposable
     /// <summary>Write a warning record in the log file.</summary>
     /// <param name="message">the message of the record</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Warning(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+    public void Warning(string message, [CallerFilePath] string sourceFile = "",
+                        [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_WARN
         if (MinLevel <= Level.Warning) {
-            WriteRecord(message, _levelStringWarn, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+            WriteRecord(message, _levelStringWarn, Path.GetFileName(sourceFile.AsSpan()),
+                lineNumber);
         }
 #endif
     }
@@ -123,10 +142,12 @@ public sealed class Logger : IDisposable
     /// <summary>Write an error record in the log file.</summary>
     /// <param name="message">the message of the record</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Error(string message, [CallerFilePath]string sourceFile = "", [CallerLineNumber]int lineNumber = -1) {
+    public void Error(string message, [CallerFilePath] string sourceFile = "",
+                      [CallerLineNumber] int lineNumber = -1) {
 #if !FEATURLESS_LOG_LEVEL_DISABLED_ERROR
         if (MinLevel <= Level.Error) {
-            WriteRecord(message, _levelStringError, Path.GetFileName(sourceFile.AsSpan()), lineNumber);
+            WriteRecord(message, _levelStringError, Path.GetFileName(sourceFile.AsSpan()),
+                lineNumber);
         }
 #endif
     }
@@ -146,14 +167,16 @@ public sealed class Logger : IDisposable
                                     ReadOnlySpan<char> callerFilePath,
                                     int lineNumber) {
         // size computation
-        int lineDigitsCount      = Tools.CountDigits(lineNumber);
+        int lineDigitsCount = Tools.CountDigits(lineNumber);
         int callerFilePathLength = callerFilePath.Length;
-        int messageLength        = message.Length;
+        int messageLength = message.Length;
         int recordByteLength;
         if (_osIsUnix) {
-            recordByteLength = ComputeRecordSizeUnix(messageLength + callerFilePathLength + lineDigitsCount);
+            recordByteLength =
+                ComputeRecordSizeUnix(messageLength + callerFilePathLength + lineDigitsCount);
         } else {
-            recordByteLength = ComputeRecordSizeWindows(messageLength + callerFilePathLength + lineDigitsCount);
+            recordByteLength =
+                ComputeRecordSizeWindows(messageLength + callerFilePathLength + lineDigitsCount);
         }
 
         char* writeRecordPtr = stackalloc char[recordByteLength];
@@ -161,7 +184,7 @@ public sealed class Logger : IDisposable
         // date
         _dateHandler.WriteDateAndTime(editRecordPtr);
         editRecordPtr[19] = '|';
-        *(long*) (editRecordPtr + 20) = levelString;
+        *(long*)(editRecordPtr + 20) = levelString;
         editRecordPtr[24] = ' ';
         editRecordPtr[25] = '|';
         // thread Id
@@ -176,9 +199,10 @@ public sealed class Logger : IDisposable
         editRecordPtr[33] = '(';
         // caller location
         fixed (char* callerFilePathPtr = callerFilePath) {
-            Unsafe.CopyBlockUnaligned((void*) (editRecordPtr + 34), (void*) callerFilePathPtr
-                           , (uint) (sizeof(char) * callerFilePathLength));
+            Unsafe.CopyBlockUnaligned(editRecordPtr + 34, callerFilePathPtr
+              , (uint)(sizeof(char) * callerFilePathLength));
         }
+
         editRecordPtr += callerFilePathLength;
         editRecordPtr[34] = ',';
 
@@ -190,8 +214,10 @@ public sealed class Logger : IDisposable
 
         // write message
         fixed (char* messagePtr = message) {
-            Unsafe.CopyBlockUnaligned((void*) (editRecordPtr + 38), (void*) messagePtr, (uint) (sizeof(char) * messageLength));
+            Unsafe.CopyBlockUnaligned(editRecordPtr + 38, messagePtr,
+                (uint)(sizeof(char) * messageLength));
         }
+
         editRecordPtr += messageLength;
 
         // write EOL
@@ -199,9 +225,8 @@ public sealed class Logger : IDisposable
             editRecordPtr[38] = '\r';
             ++editRecordPtr;
         }
+
         editRecordPtr[38] = '\n';
-
-
         WriteBuffer(writeRecordPtr, recordByteLength);
     }
 
@@ -210,6 +235,7 @@ public sealed class Logger : IDisposable
             lock (_lockFile) {
                 WriteFile(data, length);
             }
+
             _currentFileSize += _bufferLength;
             return;
         }
@@ -217,8 +243,9 @@ public sealed class Logger : IDisposable
         long offset = GetBufferOffset(length);
         Interlocked.Increment(ref _concurrentWrites);
         fixed (char* bufPtr = _buffer) {
-            Unsafe.CopyBlockUnaligned((void*) (bufPtr + offset), (void*) data, (uint)length * 2);
+            Unsafe.CopyBlockUnaligned(bufPtr + offset, data, (uint)length * sizeof(char));
         }
+
         Interlocked.Decrement(ref _concurrentWrites);
     }
 
@@ -233,10 +260,13 @@ public sealed class Logger : IDisposable
                     if (_currentFileSize + _writtenBufferChars > _maxFileSize) {
                         RollFile();
                     }
+
+
                     // write file
                     fixed (char* bufPtr = _buffer) {
                         WriteFile(bufPtr, _writtenBufferChars);
                     }
+
                     _currentFileSize += _writtenBufferChars;
                     _writtenBufferChars = 0;
                 }
@@ -244,6 +274,7 @@ public sealed class Logger : IDisposable
 
             offset = Interlocked.Add(ref _writtenBufferChars, length) - length;
         }
+
         return offset;
     }
 
@@ -252,8 +283,8 @@ public sealed class Logger : IDisposable
         _currentFileIndex += 1;
         _logFilePathes.Enqueue(_currentFileIndex);
         if (_logFilePathes.Count > _maxNumberOfFiles) {
-            int    toDeleteIdx = _logFilePathes.Dequeue();
-            string fileToDel   = GetLogFilePath(_logFileBasePath, toDeleteIdx);
+            int toDeleteIdx = _logFilePathes.Dequeue();
+            string fileToDel = GetLogFilePath(_logFileBasePath, toDeleteIdx);
             if (File.Exists(fileToDel)) {
                 File.Delete(fileToDel);
             }
@@ -288,7 +319,8 @@ public sealed class Logger : IDisposable
 
             int indexStartDot = filePath.LastIndexOf('.', indexEndDot - 1) + 1;
             //System.Diagnostics.Debug.Assert(indexStartDot != 0, "logFiles should contains only log files.");
-            if (Int32.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot), out int index)) {
+            if (int.TryParse(filePath.AsSpan(indexStartDot, indexEndDot - indexStartDot),
+                    out int index)) {
                 indices.Add(index);
             }
         }
@@ -298,7 +330,8 @@ public sealed class Logger : IDisposable
     }
 
     private unsafe void OpenFile() {
-        System.Diagnostics.Debug.Assert(_fileHandle == null, "File must be closed before opening another one.");
+        System.Diagnostics.Debug.Assert(_fileHandle == null,
+            "File must be closed before opening another one.");
         string filename = GetLogFilePath(_logFileBasePath, _currentFileIndex);
 
         if (_osIsUnix) {
@@ -335,23 +368,25 @@ public sealed class Logger : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void WriteFile(char* data, int length) {
-        length = 2 * length;
+        length = sizeof(char) * length;
+
         if (_osIsUnix) {
-            WriteFileUnix((byte*) data, length, 1, _fileHandle);
+            WriteFileUnix((byte*)data, length, 1, _fileHandle);
         } else {
-            WriteFileWindows((byte*) data, length, 1, _fileHandle);
+            WriteFileWindows((byte*)data, length, 1, _fileHandle);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe long GetCursorPosition() {
-        IntPtr cursorPosition;
+        nint cursorPosition;
         if (_osIsUnix) {
             CursorPositionUnix(_fileHandle, out cursorPosition);
         } else {
             CursorPositionWindows(_fileHandle, out cursorPosition);
         }
-        return (long)cursorPosition;
+
+        return cursorPosition;
     }
 
     /// <summary> Close the file.</summary>
@@ -362,6 +397,7 @@ public sealed class Logger : IDisposable
                     WriteFile(bufPtr, _writtenBufferChars);
                 }
             }
+
             _writtenBufferChars = 0;
         }
 
@@ -369,9 +405,7 @@ public sealed class Logger : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ComputeRecordSizeUnix(int dynamicLength) {
-        return 39 + dynamicLength;
-    }
+    private static int ComputeRecordSizeUnix(int dynamicLength) { return 39 + dynamicLength; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ComputeRecordSizeWindows(int dynamicLength) {
@@ -386,19 +420,20 @@ public sealed class Logger : IDisposable
     #region unix interop
     // windows: https://pinvoke.net, CallingConvention = CallingConvention.FastCall
     [DllImport("libc", SetLastError = false, EntryPoint = "fopen")]
-    internal extern static unsafe int* OpenFileUnix(string filename, string mode); // use _wfopen_s on windows
+    private static extern unsafe int* OpenFileUnix(string filename,
+                                                   string mode); // use _wfopen_s on windows
 
     [DllImport("libc", SetLastError = false, EntryPoint = "fclose")]
-    internal extern static unsafe int CloseFileUnix(int* handle); // use _wfopen_s on windows
+    private static extern unsafe int CloseFileUnix(int* handle); // use _wfopen_s on windows
 
     [DllImport("libc", SetLastError = false, EntryPoint = "setbuf")]
-    internal extern static unsafe void SetFileBufferUnix(int* handle, byte* buffer);
+    private static extern unsafe void SetFileBufferUnix(int* handle, byte* buffer);
 
     [DllImport("libc", SetLastError = false, EntryPoint = "fwrite")]
-    internal extern static unsafe long WriteFileUnix(byte* ptr, long size, long count, int* handle);
+    private static extern unsafe long WriteFileUnix(byte* ptr, long size, long count, int* handle);
 
     [DllImport("libc", SetLastError = false, EntryPoint = "fgetpos")]
-    internal extern static unsafe int CursorPositionUnix(int* stream, out IntPtr pos);
+    private static extern unsafe int CursorPositionUnix(int* stream, out nint pos);
 
     //[DllImport("libc", EntryPoint = "setlocale")]
     //internal extern static byte* SetLocaleUnix(int category, string locale);
@@ -406,23 +441,24 @@ public sealed class Logger : IDisposable
 
     #region windows interop
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
-               CharSet = CharSet.Ansi, SetLastError = false, EntryPoint = "fopen")]
-    internal extern static unsafe int* OpenFileWindows(string filename, string mode);
+        CharSet = CharSet.Ansi, SetLastError = false, EntryPoint = "fopen")]
+    private static extern unsafe int* OpenFileWindows(string filename, string mode);
 
-    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false, EntryPoint = "fclose")]
-    internal extern static unsafe int CloseFileWindows(int* stream);
-
+    [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false,
+        EntryPoint = "fclose")]
+    private static extern unsafe int CloseFileWindows(int* stream);
 
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall,
-               SetLastError = false, EntryPoint = "setbuf")]
-    internal extern static unsafe void SetFileBufferWindows(int* handle, byte* buffer);
+        SetLastError = false, EntryPoint = "setbuf")]
+    private static extern unsafe void SetFileBufferWindows(int* handle, byte* buffer);
 
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false
-             , EntryPoint = "fwrite")]
-    internal extern static unsafe long WriteFileWindows(byte* ptr, long size, long count, int* handle);
+      , EntryPoint = "fwrite")]
+    private static extern unsafe long WriteFileWindows(byte* ptr, long size, long count,
+                                                       int* handle);
 
     [DllImport("msvcrt.dll", CallingConvention = CallingConvention.FastCall, SetLastError = false
-             , EntryPoint = "fwrite")]
-    internal extern static unsafe int CursorPositionWindows(int* stream, out IntPtr pos);
+      , EntryPoint = "fwrite")]
+    private static extern unsafe int CursorPositionWindows(int* stream, out nint pos);
     #endregion
 }
