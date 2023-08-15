@@ -22,15 +22,23 @@ public sealed class Logger : IDisposable
         Off,
     }
 
-    private const int _bufferLength      = 65536 / sizeof(char);
-    private const long _levelStringDebug = 0x0047_0042_0044_0020L;  // DBG
-    private const long _levelStringInfo  = 0x0046_004E_0049_0020L;  // INF
-    private const long _levelStringWarn  = 0x004E_0052_0057_0020L;  // WRN
-    private const long _levelStringError = 0x0052_0052_0045_0020L;  // ERR
-    private const string _extension      = ".log";
+    /// <summary> The size of the writing buffer in bytes. </summary>
+    private const int _bufferLength = 65536 / sizeof(char);
+    /// <summary> "DBG " token. </summary>
+    private const long _levelStringDebug = 0x0047_0042_0044_0020L;
+    /// <summary> "INF " token. </summary>
+    private const long _levelStringInfo = 0x0046_004E_0049_0020L;
+    /// <summary> "WRN " token. </summary>
+    private const long _levelStringWarn = 0x004E_0052_0057_0020L;
+    /// <summary> "ERR " token. </summary>
+    private const long _levelStringError = 0x0052_0052_0045_0020L;
+    /// <summary> extension of the logger file. </summary>
+    private const string _extension = ".log";
 
+    /// <summary> True if Unix or MacOS, otherwise false. </summary>
     private static readonly bool _osIsUnix = Environment.OSVersion.Platform == PlatformID.Unix
                                              || Environment.OSVersion.Platform == PlatformID.MacOSX;
+
     private readonly long _maxFileSize;
     private readonly int _maxNumberOfFiles;
     private readonly object _lockFile;
@@ -58,10 +66,10 @@ public sealed class Logger : IDisposable
 
     private static bool SupportedOs() {
         return _osIsUnix
-           || Environment.OSVersion.Platform == PlatformID.Win32S
-           || Environment.OSVersion.Platform == PlatformID.Win32Windows
-           || Environment.OSVersion.Platform == PlatformID.Win32NT
-           || Environment.OSVersion.Platform == PlatformID.WinCE;
+               || Environment.OSVersion.Platform == PlatformID.Win32S
+               || Environment.OSVersion.Platform == PlatformID.Win32Windows
+               || Environment.OSVersion.Platform == PlatformID.Win32NT
+               || Environment.OSVersion.Platform == PlatformID.WinCE;
     }
 
     /// <summary>Create a logger instance.</summary>
@@ -75,9 +83,9 @@ public sealed class Logger : IDisposable
         unsafe {
             _fileHandle = null;
         }
+
         if (!SupportedOs()) {
-            throw new NotSupportedException(
-                "Your operating system is not supported.");
+            throw new NotSupportedException("Your operating system is not supported.");
         }
 
         _dateHandler = new DateFormatter();
@@ -93,8 +101,8 @@ public sealed class Logger : IDisposable
         List<int> indices = LookForFileIndices(files);
         _logFilePathes = new Queue<int>(indices);
         _currentFileIndex = indices.Count > 0
-                          ? indices[^1]
-                          : 0;
+            ? indices[^1]
+            : 0;
 
         OpenFile();
     }
@@ -260,7 +268,6 @@ public sealed class Logger : IDisposable
                     if (_currentFileSize + _writtenBufferChars > _maxFileSize) {
                         RollFile();
                     }
-
 
                     // write file
                     fixed (char* bufPtr = _buffer) {
