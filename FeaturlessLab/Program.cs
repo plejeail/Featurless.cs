@@ -1,10 +1,13 @@
 ﻿// ReSharper disable RedundantUsingDirective
+
+
 namespace FeaturlessLab;
 
-using Featurless;
-using FeaturlessLab.HashTable;
 
-public static class Program
+using Featurless.MiniTest;
+
+
+file static class Program
 {
     private static bool HasFlag(string[]? args, string value) {
         return args == null || args.Length == 0 || args.Contains(value);
@@ -17,9 +20,10 @@ public static class Program
             MiniTestLab.Run(Array.Empty<string>());
         }
         /* LOGGER */
-        if (HasFlag(args, "logger")) {
+        if (Program.HasFlag(args, value: "logger")) {
             LoggerLab.Run();
         }
+
         /* HASHTABLE *
         if (HasFlag(args, "hashtable")) {
             LinearTableLab.Run(Array.Empty<string>(), tests);

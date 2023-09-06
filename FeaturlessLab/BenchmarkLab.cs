@@ -1,15 +1,22 @@
 // ReSharper disable UnusedMember.Local
 // ReSharper disable UnusedParameter.Local
 // ReSharper disable UnusedVariable
+
+
 namespace FeaturlessLab;
 
-using Featurless;
+
+#region
+
+using Featurless.Benchmark;
+
+#endregion
 
 public static class BenchmarkLab
 {
     private static void Sum(int[] arr) {
         for (int i = 1; i < arr.Length; ++i) {
-            arr[i] += arr[i-1];
+            arr[i] += arr[i - 1];
         }
     }
 
@@ -24,7 +31,7 @@ public static class BenchmarkLab
 
     private static void Mult(int[] arr) {
         for (int i = 2; i < arr.Length; ++i) {
-            arr[i] *= arr[i-1];
+            arr[i] *= arr[i - 1];
         }
     }
 
@@ -37,7 +44,7 @@ public static class BenchmarkLab
         }
     }
 
-    private static void None() {}
+    private static void None() { }
 
     private static int[] CreateArray(int size) {
         int[] arrayInt = new int[size];
@@ -51,21 +58,20 @@ public static class BenchmarkLab
     public static void Run() {
         Benchmarker bench = new();
         Thread.Sleep(200);
-
-        int[] arr1 = CreateArray(20000);
-        int[] arr2 = CreateArray(20000);
-        int[] arr3 = CreateArray(20000);
-        int[] arr4 = CreateArray(20000);
-        bench.Register("test sum", "sum 1", () => Sum(arr1));
-        bench.Register("test mult", "mult 1", () => Mult(arr2));
-        bench.Register("test sum", "sum 2", () => Sum2(arr3));
-        bench.Register("test mult", "mult 2",  () => Mult2(arr4));
-        bench.Register("test sum", "sum 1", () => Sum(arr1));
-        bench.Register("test mult", "mult 1", () => Mult(arr2));
-        bench.Register("test sum", "sum 2", () => Sum2(arr3));
-        bench.Register("test mult", "mult 2", () => Mult2(arr4));
-        bench.Register("test mult", "None", None);
-        bench.Register("test sum", "None", None);
+        int[] arr1 = BenchmarkLab.CreateArray(20000);
+        int[] arr2 = BenchmarkLab.CreateArray(20000);
+        int[] arr3 = BenchmarkLab.CreateArray(20000);
+        int[] arr4 = BenchmarkLab.CreateArray(20000);
+        bench.Register(@group: "test sum", name: "sum 1", fun: () => BenchmarkLab.Sum(arr1));
+        bench.Register(@group: "test mult", name: "mult 1", fun: () => BenchmarkLab.Mult(arr2));
+        bench.Register(@group: "test sum", name: "sum 2", fun: () => BenchmarkLab.Sum2(arr3));
+        bench.Register(@group: "test mult", name: "mult 2", fun: () => BenchmarkLab.Mult2(arr4));
+        bench.Register(@group: "test sum", name: "sum 1", fun: () => BenchmarkLab.Sum(arr1));
+        bench.Register(@group: "test mult", name: "mult 1", fun: () => BenchmarkLab.Mult(arr2));
+        bench.Register(@group: "test sum", name: "sum 2", fun: () => BenchmarkLab.Sum2(arr3));
+        bench.Register(@group: "test mult", name: "mult 2", fun: () => BenchmarkLab.Mult2(arr4));
+        bench.Register(@group: "test mult", name: "None", BenchmarkLab.None);
+        bench.Register(@group: "test sum", name: "None", BenchmarkLab.None);
         bench.Run();
         Console.WriteLine(bench);
     }

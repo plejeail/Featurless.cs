@@ -1,8 +1,13 @@
 namespace Featurless.Logger;
 
+
+#region
+
 using System.Runtime.CompilerServices;
 
-internal static unsafe class Tools
+#endregion
+
+static unsafe class Tools
 {
     private static readonly byte[] _hexDigits = "0123456789abcdef"u8.ToArray();
 
@@ -38,18 +43,17 @@ internal static unsafe class Tools
         int threadId = Thread.CurrentThread.ManagedThreadId;
         do {
             int nextVal = threadId / 16;
-            *destination-- = (char)_hexDigits[threadId - nextVal * 16];
+            *destination-- = (char)Tools._hexDigits[threadId - nextVal * 16];
             threadId = nextVal;
         } while (threadId > 0);
     }
 
     internal static void WriteIntegerString(char* destination, int value, int length) {
         destination += length - 1;
-
         do {
             int nextValue = value / 10;
             int remainder = value - nextValue * 10;
-            *destination-- = (char) (remainder + 0x30);
+            *destination-- = (char)(remainder + 0x30);
             value = nextValue;
         } while (value != 0);
     }

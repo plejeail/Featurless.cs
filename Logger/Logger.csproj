@@ -13,6 +13,7 @@
         <RepositoryType>git</RepositoryType>
         <PackageTags>logger, file rolling</PackageTags>
         <RootNamespace>Featurless.Logger</RootNamespace>
+        <LangVersion>latestmajor</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

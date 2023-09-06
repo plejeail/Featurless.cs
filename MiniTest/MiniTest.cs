@@ -1,8 +1,4 @@
-﻿﻿//===-- MiniTest.cs ---------------------------------------------------------------------------===//
-//                                  SIMPLE TESTS LIBRARY
-//
-// Provide simple testing class. Ease-of-use and fast-compile time are
-// the main concerns of the library. If you find a feature in it, it's a bug.
+﻿// the main concerns of the library. If you find a feature in it, it's a bug.
 // Please report it, correct it, or do whatever you want with it.
 //
 // Tolerated features are:
@@ -29,34 +25,24 @@
 //     tester.print_summary();
 //     return tester.status();
 // }
-namespace Featurless;
+
+
+namespace Featurless.MiniTest;
+
+
+#region
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
-/// <summary>Simple, fast and lightweight unit testing class.</summary>
+#endregion
+
+/// <summary> Simple, fast and lightweight unit testing class. </summary>
 public sealed class MiniTest
 {
-    private enum StatusCode { Ok, PrintHelp, RequireFailed }
-    private enum LogLevel { Quiet, Normal, Verbose }
-    private enum FilterType { None, Enabled, Disabled }
     private const int _minAuthorizedLineMaxWidth = 10;
-    private struct Stats
-    {
-        public StatusCode Status;
-        public int CountTotal;
-        public int CountEvaluated;
-        public int CountSuccess;
-
-        public Stats() {
-            Status = StatusCode.Ok;
-            CountTotal = 0;
-            CountEvaluated = 0;
-            CountSuccess = 0;
-        }
-    }
 
     private const string _helpDescription = @"Description:
 Run featurless tests and summarize results.
@@ -74,53 +60,33 @@ You can do that: program -e group1 group3 group4
 You can do that: program -d group2
 You can NOT do that: program -e group1 group3 group4 -d group2
 ";
-    private const string _assertUninitializedFilterValues = "The filter values list should be initialized by now (but are not)";
-    private Stats _globalStats;
-    private readonly LogLevel _logLevel;
+    private const string _assertUninitializedFilterValues =
+            "The filter values list should be initialized by now (but are not)";
     private readonly FilterType _filterType;
     private readonly string[]? _filterValues;
     private readonly Dictionary<string, Stats> _groupStats;
-    private int _lineMaxWidth;
+    private readonly LogLevel _logLevel;
     private readonly Stream _outputStream;
+    private Stats _globalStats;
+    private int _lineMaxWidth;
 
-    /// <summary>
-    /// Only used in console. Get/Set the color used to print success logs (with '-v').
-    /// Default value is Console.ForegroundColor.
-    /// </summary>
-    public ConsoleColor SuccessColor;
+    /// <summary> Get/Set the encoding of the ouptut stream </summary>
+    public Encoding Encoding;
 
-    /// <summary>
-    /// Only used in console. Get/Set the color used to print failure logs.
-    /// Default value is Console.ForegroundColor.
-    /// </summary>
+    /// <summary> Only used in console. Get/Set the color used to print failure logs. Default value is Console.ForegroundColor. </summary>
     public ConsoleColor ErrorColor;
 
     /// <summary>
-    /// Get/Set the max line width of the failed tests logs. Default to Console.WindowWidth in
-    /// console or 120 if using a stream.
+    ///     Only used in console. Get/Set the color used to print success logs (with '-v'). Default value is
+    ///     Console.ForegroundColor.
     /// </summary>
-    /// <exception cref="ArgumentException">When setting the value, if value is lower than minimum (10)</exception>
-    public int MaxWidth {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _lineMaxWidth;
-        set {
-            if (value < _minAuthorizedLineMaxWidth) {
-                throw new ArgumentException("MaxWidth argument is too low (<"
-                                           + _minAuthorizedLineMaxWidth
-                                           + ')');
-            }
+    public ConsoleColor SuccessColor;
 
-            _lineMaxWidth = value;
-        }
-    }
-
-    /// <summary>Get/Set the encoding of the ouptut stream</summary>
-    public Encoding Encoding;
-
-    /// <param name="args">The program arguments</param>
-    /// <param name="stream">A writeable stream to write into. If null (default) write in console</param>
-    /// <exception cref="ArgumentException">throw an ArgumentException if multiple --enable/--disable
-    /// options are passed, or if the stream passed can not write
+    /// <param name="args"> The program arguments </param>
+    /// <param name="stream"> A writeable stream to write into. If null (default) write in console </param>
+    /// <exception cref="ArgumentException">
+    ///     throw an ArgumentException if multiple --enable/--disable options are passed, or
+    ///     if the stream passed can not write
     /// </exception>
     public MiniTest(string[]? args = null, Stream? stream = null) {
         if (stream == null) {
@@ -140,81 +106,101 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         _groupStats = new Dictionary<string, Stats>(24);
         _lineMaxWidth = Console.WindowWidth;
         Encoding = Encoding.Default;
-
         SuccessColor = Console.ForegroundColor;
         ErrorColor = Console.ForegroundColor;
-
         if (args != null) {
             const string errorMessageFilterType = "Filter type set to both enabled '-e' and disabled '-d'";
             for (int i = 0; i < args.Length; ++i) {
                 string argument = args[i];
                 switch (argument) {
-                    case "-h":
-                    case "--help":
-                        Console.Write(_helpDescription);
-                        _globalStats.Status = StatusCode.PrintHelp;
-                        return;
-                    case "-e":
-                    case "--enabled":
-                        if (_filterType == FilterType.Disabled) {
-                            throw new ArgumentException(errorMessageFilterType);
-                        }
-                        _filterValues = new string[args.Length - i - 1];
-                        _filterType = FilterType.Enabled;
-                        break;
-                    case "-d":
-                    case "--disabled":
-                        if (_filterType == FilterType.Enabled) {
-                            throw new ArgumentException(errorMessageFilterType);
-                        }
-                        _filterValues = new string[args.Length - i - 1];
-                        _filterType = FilterType.Disabled;
-                        break;
-                    case "-q":
-                    case "--quiet":
-                        _logLevel = LogLevel.Quiet;
-                        break;
-                    case "-v":
-                    case "--verbose":
-                        _logLevel = LogLevel.Verbose;
-                        break;
-                    default:
-                        if (_filterType == FilterType.None) {
-                            throw new ArgumentException("invalid argument " + argument);
-                        }
-                        Debug.Assert(_filterValues != null, _assertUninitializedFilterValues);
-                        _filterValues[i - args.Length + _filterValues.Length] = argument;
-                        break;
+                case "-h":
+                case "--help":
+                    Console.Write(MiniTest._helpDescription);
+                    _globalStats.Status = StatusCode.PrintHelp;
+                    return;
+                case "-e":
+                case "--enabled":
+                    if (_filterType == FilterType.Disabled) {
+                        throw new ArgumentException(errorMessageFilterType);
+                    }
+
+                    _filterValues = new string[args.Length - i - 1];
+                    _filterType = FilterType.Enabled;
+                    break;
+                case "-d":
+                case "--disabled":
+                    if (_filterType == FilterType.Enabled) {
+                        throw new ArgumentException(errorMessageFilterType);
+                    }
+
+                    _filterValues = new string[args.Length - i - 1];
+                    _filterType = FilterType.Disabled;
+                    break;
+                case "-q":
+                case "--quiet":
+                    _logLevel = LogLevel.Quiet;
+                    break;
+                case "-v":
+                case "--verbose":
+                    _logLevel = LogLevel.Verbose;
+                    break;
+                default:
+                    if (_filterType == FilterType.None) {
+                        throw new ArgumentException("invalid argument " + argument);
+                    }
+
+                    Debug.Assert(_filterValues != null, MiniTest._assertUninitializedFilterValues);
+                    _filterValues[i - args.Length + _filterValues.Length] = argument;
+                    break;
                 }
             }
         }
     }
 
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="value">result of the test, false if failed, true if successful</param>
+    /// <summary>
+    ///     Get/Set the max line width of the failed tests logs. Default to Console.WindowWidth in console or 120 if
+    ///     using a stream.
+    /// </summary>
+    /// <exception cref="ArgumentException"> When setting the value, if value is lower than minimum (10) </exception>
+    public int MaxWidth {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _lineMaxWidth;
+        set {
+            if (value < MiniTest._minAuthorizedLineMaxWidth) {
+                throw new ArgumentException("MaxWidth argument is too low (<"
+                                          + MiniTest._minAuthorizedLineMaxWidth
+                                          + ')');
+            }
+
+            _lineMaxWidth = value;
+        }
+    }
+
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="value"> result of the test, false if failed, true if successful </param>
     public void Require(string testName, bool value) {
-        bool success = InternalCheck(() => value, testName);
+        bool success = InternalCheck(expression: () => value, testName);
         if (!success) {
             _globalStats.Status = StatusCode.RequireFailed;
         }
     }
 
-    /// <param name="groupName">name of the group of the check</param>
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="value">result of the test, false if failed, true if successful</param>
-    /// <exception cref="ArgumentException">No group registered with the provided group name</exception>
+    /// <param name="groupName"> name of the group of the check </param>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="value"> result of the test, false if failed, true if successful </param>
+    /// <exception cref="ArgumentException"> No group registered with the provided group name </exception>
     public void Require(string groupName, string testName, bool value) {
-        bool success = InternalCheck(() => value, testName, groupName);
+        bool success = InternalCheck(expression: () => value, testName, groupName);
         if (!success) {
             ref Stats stats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
-            Debug.Assert(!Unsafe.IsNullRef(ref stats), "group should always exist after internal check");
+            Debug.Assert(!Unsafe.IsNullRef(ref stats), message: "group should always exist after internal check");
             stats.Status = StatusCode.RequireFailed;
         }
     }
 
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="expression">a function returning a boolean that is evaluated</param>
-    /// <remarks>the expression is evaluated only if needed (the instance of MiniTest is not in failed State</remarks>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="expression"> a function returning a boolean that is evaluated </param>
+    /// <remarks> the expression is evaluated only if needed (the instance of MiniTest is not in failed State </remarks>
     public void Require(string testName, Func<bool> expression) {
         bool success = InternalCheck(expression, testName);
         if (!success) {
@@ -222,51 +208,51 @@ You can NOT do that: program -e group1 group3 group4 -d group2
         }
     }
 
-    /// <param name="groupName">name of the group of the check</param>
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="expression">a function returning a boolean that is evaluated</param>
-    /// <remarks>the expression is evaluated only if needed (the instance of MiniTest is not in failed State</remarks>
-    /// <exception cref="ArgumentException">No group registered with the provided group name</exception>
+    /// <param name="groupName"> name of the group of the check </param>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="expression"> a function returning a boolean that is evaluated </param>
+    /// <remarks> the expression is evaluated only if needed (the instance of MiniTest is not in failed State </remarks>
+    /// <exception cref="ArgumentException"> No group registered with the provided group name </exception>
     public void Require(string groupName, string testName, Func<bool> expression) {
         bool success = InternalCheck(expression, testName, groupName);
         if (!success) {
             ref Stats stats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
-            Debug.Assert(!Unsafe.IsNullRef(ref stats), "group should always exist after internal check");
+            Debug.Assert(!Unsafe.IsNullRef(ref stats), message: "group should always exist after internal check");
             stats.Status = StatusCode.RequireFailed;
         }
     }
 
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="value">result of the test, false if failed, true if successful</param>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="value"> result of the test, false if failed, true if successful </param>
     public void Check(string testName, bool value) {
-        InternalCheck(() => value, testName);
+        InternalCheck(expression: () => value, testName);
     }
 
-    /// <param name="groupName">name of the group of the check</param>
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="value">result of the test, false if failed, true if successful</param>
-    /// <exception cref="ArgumentException">No group registered with the provided group name</exception>
+    /// <param name="groupName"> name of the group of the check </param>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="value"> result of the test, false if failed, true if successful </param>
+    /// <exception cref="ArgumentException"> No group registered with the provided group name </exception>
     public void Check(string groupName, string testName, bool value) {
-        InternalCheck(() => value, testName, groupName);
+        InternalCheck(expression: () => value, testName, groupName);
     }
 
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="expression">a function returning a boolean that is evaluated</param>
-    /// <remarks>the expression is evaluated only if needed (the instance of MiniTest is not in failed State</remarks>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="expression"> a function returning a boolean that is evaluated </param>
+    /// <remarks> the expression is evaluated only if needed (the instance of MiniTest is not in failed State </remarks>
     public void Check(string testName, Func<bool> expression) {
         InternalCheck(expression, testName);
     }
 
-    /// <param name="groupName">name of the group of the check</param>
-    /// <param name="testName">name displayed in individual failure/success logs</param>
-    /// <param name="expression">a function returning a boolean that is evaluated</param>
-    /// <remarks>the expression is evaluated only if needed (the instance of MiniTest is not in failed State</remarks>
-    /// <exception cref="ArgumentException">No group registered with the provided group name</exception>
+    /// <param name="groupName"> name of the group of the check </param>
+    /// <param name="testName"> name displayed in individual failure/success logs </param>
+    /// <param name="expression"> a function returning a boolean that is evaluated </param>
+    /// <remarks> the expression is evaluated only if needed (the instance of MiniTest is not in failed State </remarks>
+    /// <exception cref="ArgumentException"> No group registered with the provided group name </exception>
     public void Check(string groupName, string testName, Func<bool> expression) {
         InternalCheck(expression, testName, groupName);
     }
 
-    /// <summary>Write a detailed summary of the tests performed, at a global level and for each group</summary>
+    /// <summary> Write a detailed summary of the tests performed, at a global level and for each group </summary>
     public void Summarize() {
         if (_globalStats.Status == StatusCode.PrintHelp) {
             // no tests done, do not print summary
@@ -280,21 +266,19 @@ You can NOT do that: program -e group1 group3 group4 -d group2
 
         int globalCoverage = 100 * _globalStats.CountEvaluated / _globalStats.CountTotal;
         int skippedTotal = _globalStats.CountTotal - _globalStats.CountEvaluated;
-
         _outputStream.Write(Encoding.GetBytes($@"#####   TEST GLOBAL SUMMARY
 - successes: {_globalStats.CountSuccess}/{_globalStats.CountEvaluated}
 - coverage:  {globalCoverage}% ({skippedTotal} checks skipped)
 - total:     {_globalStats.CountTotal} checks
 ###   Groups Summary   ##
 "));
-
         foreach (string groupName in _groupStats.Keys) {
             if (IsGroupFiltered(groupName)) {
                 continue;
             }
 
             ref Stats stats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
-            Debug.Assert(!Unsafe.IsNullRef(ref stats), "group registered but unitialized");
+            Debug.Assert(!Unsafe.IsNullRef(ref stats), message: "group registered but unitialized");
             if (stats.CountTotal == 0) {
                 _outputStream.Write(Encoding.GetBytes($"- [[{groupName}]] no tests found."));
                 continue;
@@ -302,15 +286,16 @@ You can NOT do that: program -e group1 group3 group4 -d group2
 
             string isOk = stats.Status == StatusCode.Ok ? "OK" : "KO";
             int coveragePercent = stats.CountTotal > 0 ? 100 * stats.CountEvaluated / stats.CountTotal : -1;
-            string str = $"- [{groupName}] status: {isOk}, coverage: {coveragePercent}%, {stats.CountSuccess}/{stats.CountEvaluated} successes{Environment.NewLine}";
+            string str =
+                    $"- [{groupName}] status: {isOk}, coverage: {coveragePercent}%, {stats.CountSuccess}/{stats.CountEvaluated} successes{Environment.NewLine}";
             _outputStream.Write(Encoding.GetBytes(str));
         }
     }
 
-    /// <summary>True if all test done until now are successfule, otherwise false.</summary>
+    /// <summary> True if all test done until now are successfule, otherwise false. </summary>
     public bool StatusOk(string? groupName = null) {
         if (groupName != null) {
-             ref Stats groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
+            ref Stats groupStats = ref CollectionsMarshal.GetValueRefOrNullRef(_groupStats, groupName);
             if (Unsafe.IsNullRef(ref groupStats)) {
                 throw new KeyNotFoundException($"Group '{groupName}' does not exists.");
             }
@@ -318,18 +303,17 @@ You can NOT do that: program -e group1 group3 group4 -d group2
             return groupStats.CountSuccess == groupStats.CountEvaluated;
         }
 
-
         return _globalStats.CountSuccess == _globalStats.CountEvaluated;
     }
 
-    /// <summary>Very brief description of results</summary>
+    /// <summary> Very brief description of results </summary>
     public override string ToString() {
-        return $"Test: {_groupStats.Count} groups, {_globalStats.CountSuccess}/{_globalStats.CountEvaluated} success, {_globalStats.CountTotal} total";
+        return
+                $"Test: {_groupStats.Count} groups, {_globalStats.CountSuccess}/{_globalStats.CountEvaluated} success, {_globalStats.CountTotal} total";
     }
 
-    /// <summary>Who cares about private methods doc ?</summary>
-    private void WriteMessage(string message, ConsoleColor color)
-    {
+    /// <summary> Who cares about private methods doc ? </summary>
+    private void WriteMessage(string message, ConsoleColor color) {
         ConsoleColor defaultColor = Console.ForegroundColor;
         Console.ForegroundColor = color;
         _outputStream.Write(Encoding.GetBytes(message));
@@ -339,21 +323,21 @@ You can NOT do that: program -e group1 group3 group4 -d group2
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsGroupFiltered(string groupName) {
         switch (_filterType) {
-            case FilterType.Disabled:
-                Debug.Assert(_filterValues != null, _assertUninitializedFilterValues);
-                return _filterValues.Contains(groupName);
-            case FilterType.Enabled:
-                Debug.Assert(_filterValues != null, _assertUninitializedFilterValues);
-                return !_filterValues.Contains(groupName);
-            case FilterType.None:
-            default:
-                return false;
+        case FilterType.Disabled:
+            Debug.Assert(_filterValues != null, MiniTest._assertUninitializedFilterValues);
+            return _filterValues.Contains(groupName);
+        case FilterType.Enabled:
+            Debug.Assert(_filterValues != null, MiniTest._assertUninitializedFilterValues);
+            return !_filterValues.Contains(groupName);
+        case FilterType.None:
+        default:
+            return false;
         }
     }
 
-    /// <summary> Register a group in the MiniTest instance</summary>
-    /// <param name="name">The name of the group to register</param>
-    /// <exception cref="ArgumentException">A group with the same name has already been registered.</exception>
+    /// <summary> Register a group in the MiniTest instance </summary>
+    /// <param name="name"> The name of the group to register </param>
+    /// <exception cref="ArgumentException"> A group with the same name has already been registered. </exception>
     private void AddGroup(string name) {
         if (_groupStats.ContainsKey(name)) {
             throw new ArgumentException($"Group '{name}' already added to the test");
@@ -404,18 +388,38 @@ You can NOT do that: program -e group1 group3 group4 -d group2
             }
 
             if (_logLevel == LogLevel.Verbose) {
-                WriteMessage(message.PadRight(_lineMaxWidth - _minAuthorizedLineMaxWidth, '.') + $".Success{Environment.NewLine}"
-                           , SuccessColor);
+                WriteMessage(message.PadRight(_lineMaxWidth - MiniTest._minAuthorizedLineMaxWidth, paddingChar: '.')
+                           + $".Success{Environment.NewLine}"
+                             , SuccessColor);
             }
 
             return true;
         }
 
         if (_logLevel != LogLevel.Quiet) {
-            WriteMessage(message.PadRight(_lineMaxWidth - _minAuthorizedLineMaxWidth, '.')
-                    + $".Failed{Environment.NewLine}", ErrorColor);
+            WriteMessage(message.PadRight(_lineMaxWidth - MiniTest._minAuthorizedLineMaxWidth, paddingChar: '.')
+                       + $".Failed{Environment.NewLine}", ErrorColor);
         }
 
         return false;
+    }
+
+    private enum StatusCode { Ok, PrintHelp, RequireFailed, }
+    private enum LogLevel { Quiet, Normal, Verbose, }
+    private enum FilterType { None, Enabled, Disabled, }
+
+    private struct Stats
+    {
+        public StatusCode Status;
+        public int CountTotal;
+        public int CountEvaluated;
+        public int CountSuccess;
+
+        public Stats() {
+            Status = StatusCode.Ok;
+            CountTotal = 0;
+            CountEvaluated = 0;
+            CountSuccess = 0;
+        }
     }
 }
