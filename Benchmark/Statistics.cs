@@ -38,16 +38,15 @@ readonly struct Statistics
         _measuresCount = measures.Length - 1;
         _processorCount = processorCount;
         Array.Sort(measures);
-        long avg = 0;
+        _average = 0;
         for (int i = 0; i < _measuresCount; ++i) {
-            avg = avg + measures[i];
+            _average = _average + measures[i];
         }
+        _average = _average / measures.Length;
 
-        avg = avg / measures.Length;
-        _average = avg;
         long stdev = 0;
         for (int i = 0; i < _measuresCount; ++i) {
-            long value = measures[i] - avg;
+            long value = measures[i] - _average;
             stdev = stdev + value * value;
         }
 

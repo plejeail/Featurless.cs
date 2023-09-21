@@ -107,17 +107,15 @@ public sealed class Benchmarker
         }
 
         // Tiered Jit Preparation
-        (int itersCountPerBatch, long batchDuration) = EstimateItersPerMeasureAndDuration(fun);
-        int batchesCount = Math.Min((int)(_maxDurationAutoBench / batchDuration), Benchmarker._maxMeasuresCount);
-        if (batchesCount < 30) {
-            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({batchesCount} < 30).");
-            return;
+        (int iterCount, int batchCount, long batchDuration) = EstimateItersPerMeasureAndDuration(fun);
+        if (batchCount < 30) {
+            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Warning: Very small batch count: ({batchCount} < 30).");
         }
         Benchmarker.JitOptimize(fun);
 
-        TimeSpan estimatedTime = Benchmarker.ToTimeSpan(batchesCount * batchDuration);
-        _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchesCount}x{itersCountPerBatch}, estimated time: {estimatedTime.TotalSeconds:G4}s).");
-        _plans.Add(new Plan(group, name, fun, new Options(batchesCount, itersCountPerBatch)));
+        TimeSpan estimatedTime = Benchmarker.ToTimeSpan(batchCount * batchDuration);
+        _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} ({batchCount}x{iterCount}, estimated time: {estimatedTime.TotalSeconds:G4}s).");
+        _plans.Add(new Plan(group, name, fun, new Options(batchCount, iterCount)));
     }
 
     /// <summary> Register a <see cref="System.Action" /> benchmark. </summary>
@@ -131,13 +129,11 @@ public sealed class Benchmarker
         }
 
         if (opts.MeasuresCount < 30) {
-            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough batches ({opts.MeasuresCount} < 30).");
-            return;
+            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Warning: Very small batch count: ({opts.MeasuresCount} < 30).");
         }
 
         if (opts.ItersCountPerMeasure < 1) {
-            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Failed: Not enough iterations/batch ({opts.ItersCountPerMeasure} < 1).");
-            return;
+            _output.WriteLine($"[BENCHMARK::REGISTER] {group}.{name} - Warning: Very few iterationsper batch: ({opts.ItersCountPerMeasure} < 1).");
         }
 
         Benchmarker.JitOptimize(fun);
@@ -240,13 +236,16 @@ public sealed class Benchmarker
     /// <summary> Estimate the number of iterations per measure and the duration of a measure. </summary>
     /// <param name="fun"> The benchmarked function. </param>
     /// <returns> A tuple containing the length and the duration. </returns>
-    private (int length, long duration) EstimateItersPerMeasureAndDuration(Action fun) {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private (int length, int batchCount, long duration) EstimateItersPerMeasureAndDuration(Action fun) {
         Stopwatch measure = Stopwatch.StartNew();
         fun();
         measure.Stop();
-        int nbiters = (int)_maxDurationAutoBench / (int)(measure.ElapsedTicks * 30);
-        nbiters = Math.Max(nbiters, Benchmarker._minItersCount);
-        return (nbiters, nbiters * measure.ElapsedTicks);
+
+        int iterCount = (int)(_maxDurationAutoBench / measure.ElapsedTicks);
+        int batchCount = Math.Min((int) iterCount / 30, Benchmarker._maxMeasuresCount);
+        iterCount = Math.Max(iterCount / batchCount, 1);
+        return (iterCount, batchCount, iterCount * measure.ElapsedTicks);
     }
 
     /// <summary> Randomize elements order in a <see cref="System.Collections.Generic.List{T}" />. </summary>
